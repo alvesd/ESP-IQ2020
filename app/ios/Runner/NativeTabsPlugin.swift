@@ -105,6 +105,8 @@ final class NativeTabsPlugin: NSObject, UITabBarControllerDelegate {
     flutterViewController = flutter
     let tbc = UITabBarController()
     tbc.delegate = self
+    // The app always draws a dark night-spa scene; match the system bar to it.
+    tbc.overrideUserInterfaceStyle = .dark
     // Let the system choose: the Duo's native bar, a bottom tab bar, or a sidebar.
     if #available(iOS 27.0, *) {
       tbc.sidebar.preferredPlacement = .automatic

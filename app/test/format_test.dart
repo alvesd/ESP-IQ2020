@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iq2020_mobile/ui/spa_screen.dart';
 
@@ -16,6 +17,14 @@ void main() {
 
   test('hour-based counters convert too', () {
     expect(formatDuration(9271, 'h'), '386d 7h');
+  });
+
+  test('temperature colour runs blue (cool) to red-orange (hot)', () {
+    expect(tempColor(0), const Color(0xFF3D7BFF));
+    expect(tempColor(1), const Color(0xFFFF5A36));
+    expect(tempColor(2), const Color(0xFFFF5A36)); // clamped
+    final mid = tempColor(0.9);
+    expect(mid.r, greaterThan(mid.b)); // warm side of the scale
   });
 
   test('missing values and unknown units', () {

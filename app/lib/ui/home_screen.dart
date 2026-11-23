@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../device_store.dart';
 import 'add_device_sheet.dart';
+import 'spa_backdrop.dart';
 import 'spa_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -36,7 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _open(SavedDevice d) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpaScreen(device: d, store: widget.store)));
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpaBackdrop(child: SpaScreen(device: d, store: widget.store))));
   }
 
   Future<void> _add({DiscoveredDevice? from, SavedDevice? edit}) async {

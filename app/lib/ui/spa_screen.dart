@@ -727,6 +727,13 @@ class _ClimateCardState extends State<_ClimateCard> {
     final presets = info.climatePresets.where((p) => p == ClimatePreset.boost || p == ClimatePreset.eco).toList();
     final enabled = widget.client.status == ConnectionStatus.connected && !target.isNaN;
     const white = Colors.white;
+    // Card colour follows the water temperature (blue when cool, red-orange near the top of the
+    // range), deepened toward the night palette so white text stays readable.
+    const deep = Color(0xFF062530);
+    final heat = tempColor((current - _range.$1) / (_range.$2 - _range.$1));
+    final cardColors = current.isNaN
+        ? action.$3
+        : [Color.lerp(heat, deep, 0.15)!, Color.lerp(heat, deep, 0.55)!];
 
     Widget roundButton(IconData icon, VoidCallback? onPressed) => Material(
           color: white.withValues(alpha: onPressed == null ? 0.10 : 0.22),
@@ -745,8 +752,8 @@ class _ClimateCardState extends State<_ClimateCard> {
       duration: const Duration(milliseconds: 400),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: action.$3),
-        boxShadow: [BoxShadow(color: action.$3.last.withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 10))],
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: cardColors),
+        boxShadow: [BoxShadow(color: cardColors.first.withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 10))],
       ),
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
       child: Theme(
@@ -755,7 +762,7 @@ class _ClimateCardState extends State<_ClimateCard> {
           segmentedButtonTheme: SegmentedButtonThemeData(
             style: SegmentedButton.styleFrom(
               foregroundColor: white,
-              selectedForegroundColor: action.$3.last,
+              selectedForegroundColor: cardColors.last,
               selectedBackgroundColor: white,
               side: BorderSide(color: white.withValues(alpha: 0.5)),
             ),
@@ -852,6 +859,23 @@ class _ClimateCardState extends State<_ClimateCard> {
       ),
     );
   }
+}
+
+/// Cool-to-hot scale used by the dial and the temperature card: blue at the bottom of the
+/// spa's range, through aqua and amber, to red-orange at the top.
+const _tempColors = [Color(0xFF3D7BFF), Color(0xFF22C3D6), Color(0xFFFFB347), Color(0xFFFF5A36)];
+const _tempStops = [0.0, 0.35, 0.72, 1.0];
+
+/// Colour for a position 0..1 within the temperature range.
+Color tempColor(double f) {
+  final t = f.isNaN ? 0.35 : f.clamp(0.0, 1.0);
+  for (var i = 1; i < _tempStops.length; i++) {
+    if (t <= _tempStops[i]) {
+      final local = (t - _tempStops[i - 1]) / (_tempStops[i] - _tempStops[i - 1]);
+      return Color.lerp(_tempColors[i - 1], _tempColors[i], local)!;
+    }
+  }
+  return _tempColors.last;
 }
 
 /// 270° radial gauge from [min] to [max]. The filled arc shows the current water temperature;
@@ -968,10 +992,28 @@ class _TempDialPainter extends CustomPainter {
       canvas.drawLine(c + dir * (radius - stroke - 4), c + dir * (radius - stroke - (i % 5 == 0 ? 12 : 8)), tick);
     }
 
-    // Current water temperature.
+    // Current water temperature: the arc runs blue -> red across the whole range, so its tip
+    // shows how hot the water is. A soft glow underneath lifts it off the card.
     final cf = _frac(current);
     if (!cf.isNaN && cf > 0) {
-      canvas.drawArc(rect, start, sweep * cf, false, arc(Colors.white.withValues(alpha: 0.95)));
+      // Hold the hot end through half the bottom gap, then switch hard to blue, so the round
+      // cap that pokes just before the start of the arc is blue rather than wrapped-around red.
+      final sf = sweep / (2 * pi);
+      final gapMid = sf + (1 - sf) / 2;
+      final shader = SweepGradient(
+        colors: [..._tempColors, _tempColors.last, _tempColors.first, _tempColors.first],
+        stops: [..._tempStops.map((s) => s * sf), gapMid, gapMid, 1.0],
+        transform: GradientRotation(start),
+      ).createShader(rect);
+      canvas.drawArc(
+          rect,
+          start,
+          sweep * cf,
+          false,
+          arc(Colors.white)
+            ..shader = shader
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      canvas.drawArc(rect, start, sweep * cf, false, arc(Colors.white)..shader = shader);
     }
 
     // Target knob.
@@ -981,13 +1023,14 @@ class _TempDialPainter extends CustomPainter {
       final p = c + Offset(cos(a), sin(a)) * radius;
       canvas.drawCircle(p, stroke * 0.95, Paint()..color = Colors.black.withValues(alpha: 0.18));
       canvas.drawCircle(p, stroke * 0.85, Paint()..color = enabled ? Colors.white : Colors.white54);
+      // Ring in the target temperature's colour.
       canvas.drawCircle(
           p,
-          stroke * 0.85,
+          stroke * 0.55,
           Paint()
-            ..color = Colors.black.withValues(alpha: 0.12)
+            ..color = tempColor(tf)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5);
+            ..strokeWidth = 3);
     }
   }
 
@@ -1088,6 +1131,7 @@ class _BigTile extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         color: on ? null : theme.cardTheme.color ?? theme.colorScheme.surfaceContainerLow,
+        border: on ? null : Border.all(color: Colors.white.withValues(alpha: 0.12)),
         gradient: on
             ? LinearGradient(
                 begin: Alignment.topLeft,
