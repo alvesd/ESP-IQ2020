@@ -38,6 +38,13 @@ cd app && flutter test test/protocol_test.dart --plain-name 'noise'   # run a si
 cd app && flutter run
 ```
 
+TestFlight release (App Store Connect app "IQ2020 Spa", bundle `com.alvesd.iq2020Mobile`, team `JBD3U73AKM`; Xcode must be signed in to that team). The archive is unsigned on purpose: automatic signing would want a development profile, which needs a registered device. Export signs with Apple's cloud-managed distribution certificate. Bump `version:` in `app/pubspec.yaml` (the build number after `+`) before each upload.
+```bash
+cd app && flutter build ios --release --no-codesign
+cd app/ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release -sdk iphoneos -archivePath ../build/ios/archive/Runner.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO archive
+cd app && xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive -exportPath build/ios/upload -exportOptionsPlist ios/ExportOptionsUpload.plist -allowProvisioningUpdates   # ios/ExportOptions.plist = local .ipa only
+```
+
 Talking to a real device from the command line (independent of the Dart client): `pip install aioesphomeapi` then `aioesphomeapi-logs --noise-psk '<key>' hot-tub.local`.
 
 ## Firmware architecture (components/iq2020)
