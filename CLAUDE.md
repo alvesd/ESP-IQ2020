@@ -66,7 +66,9 @@ Talking to a real device from the command line (independent of the Dart client):
 - The ESP32 allows at most 5 API connections. Each app relaunch leaves a stale connection until the ESP32's keepalive drops it, so rapid relaunches during testing show "Connection reset by peer" until the slots free up.
 - `device_store.dart`: saved devices and their API keys are kept in `flutter_secure_storage`. Discovery uses `bonsoir` for `_esphomelib._tcp`; iOS needs `NSLocalNetworkUsageDescription` and `NSBonjourServices`, which `bootstrap.sh` adds.
 
-## Known gaps
+## Verified on real hardware
 
-- The Dart Noise handshake and transport match the reference Python `noiseprotocol` 0.3.1 library byte for byte (`test/noise_interop_test.dart`, using fixed ephemeral-key vectors). The TCP framing, the message sequence and the UI haven't been tested against a real ESPHome device yet.
+- The app has been run against the owner's hot tub (`hotspring`, ESPHome 2026.11.0, `firmware/hotspring.yaml`): encrypted connect, entity listing, live states, and the controls (switches, jets, lights, target temperature via −/+ and the dial) all work. The Dart Noise code also matches the reference Python `noiseprotocol` 0.3.1 byte for byte (`test/noise_interop_test.dart`).
+
+## Known gaps
 - Remote access (outside home Wi‑Fi) isn't implemented. The intended options are a user VPN (Tailscale/WireGuard) or ESPHome `mqtt:` to a hosted broker. Never port-forward 6053 or the RS485 bridge port.
