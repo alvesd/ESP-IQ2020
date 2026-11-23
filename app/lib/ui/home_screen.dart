@@ -36,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _open(SavedDevice d) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpaScreen(device: d)));
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpaScreen(device: d, store: widget.store)));
   }
 
   Future<void> _add({DiscoveredDevice? from, SavedDevice? edit}) async {

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <!-- Domed cap with three pour holes (even-odd cut-outs) -->
+  <path fill-rule="evenodd" fill="#000"
+        d="M7 8V6.5A3.5 3.5 0 0 1 10.5 3h3A3.5 3.5 0 0 1 17 6.5V8Z
+           M9.9 5.6a0.8 0.8 0 1 0 0.001 0Z
+           M12 4.9a0.8 0.8 0 1 0 0.001 0Z
+           M14.1 5.6a0.8 0.8 0 1 0 0.001 0Z"/>
+  <!-- Collar -->
+  <rect x="6.3" y="8.6" width="11.4" height="1.8" rx="0.9" fill="#000"/>
+  <!-- Body, slightly flared toward the base -->
+  <path fill="#000" d="M7.2 11h9.6l1.1 9.3A1.5 1.5 0 0 1 16.4 22H7.6a1.5 1.5 0 0 1-1.5-1.7Z"/>
+</svg>

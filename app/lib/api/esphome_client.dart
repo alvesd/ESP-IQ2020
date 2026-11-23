@@ -193,7 +193,9 @@ class _NoiseFrameHelper implements _FrameHelper {
     final msg = await _dec!.decrypt(frame);
     if (msg.length < 4) throw ApiException('Decrypted message too short');
     final type = (msg[0] << 8) | msg[1];
-    return (type, Uint8List.sublistView(msg, 4));
+    final dataLen = (msg[2] << 8) | msg[3];
+    if (dataLen > msg.length - 4) throw ApiException('Bad data packet: length $dataLen > ${msg.length - 4}');
+    return (type, Uint8List.sublistView(msg, 4, 4 + dataLen));
   }
 }
 
@@ -234,17 +236,23 @@ class EspHomeClient extends ChangeNotifier {
   Future<void> connect() async {
     _wantConnected = true;
     _reconnectTimer?.cancel();
+    // Lifecycle "resumed" can fire while a connection is already up or mid-handshake; opening a
+    // second socket then makes ESPHome reset the connection.
+    if (status == ConnectionStatus.connecting || status == ConnectionStatus.connected) return;
     await _connectOnce();
   }
 
   Future<void> disconnect() async {
     _wantConnected = false;
     _reconnectTimer?.cancel();
+    final frames = _frames;
     if (status == ConnectionStatus.connected) {
       try {
         await _send(Requests.empty(MsgId.disconnectRequest));
       } catch (_) {}
     }
+    // If connect() ran while we awaited, a newer connection owns the socket: leave it alone.
+    if (_wantConnected || !identical(frames, _frames)) return;
     _teardown(ConnectionStatus.disconnected);
   }
 
@@ -325,9 +333,10 @@ class EspHomeClient extends ChangeNotifier {
         _lastRx = DateTime.now();
         _dispatch(type, data);
       }
-    } catch (e) {
+    } catch (e, st) {
       if (!identical(frames, _frames)) return;
-      lastError = e is ApiException ? e.message : 'Connection lost';
+      debugPrint('ESPHome read loop failed: $e\n$st');
+      lastError = e is ApiException ? e.message : 'Connection lost (${e.runtimeType}: $e)';
       _teardown(ConnectionStatus.failed);
       _scheduleReconnect();
     }

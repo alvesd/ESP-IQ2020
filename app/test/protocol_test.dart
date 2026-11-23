@@ -51,6 +51,28 @@ void main() {
       expect(state.fanSpeedLevel, 2);
     });
 
+    test('wrong wire type reads as default instead of throwing', () {
+      // Field 1 is a string here, but read as fixed32/uint/float.
+      final m = ProtoMessage.decode((ProtoWriter()..string(1, 'restart')).toBytes());
+      expect(m.fixed32(1), 0);
+      expect(m.uint(1), 0);
+      expect(m.float32(1), 0);
+      expect(m.string(1), 'restart');
+    });
+
+    test('unknown message types are ignored', () {
+      // e.g. ListEntitiesServicesResponse (41): string name, fixed32 key.
+      final data = (ProtoWriter()..string(1, 'svc')..fixed32(2, 5)).toBytes();
+      expect(EntityInfo.fromList(41, data), isNull);
+      expect(EntityState.fromState(41, data), isNull);
+    });
+
+    test('object_id falls back to a slug of the name', () {
+      final list = (ProtoWriter()..fixed32(2, 9)..string(3, 'Power On Counter')).toBytes();
+      expect(EntityInfo.fromList(MsgId.listSensor, list)!.objectId, 'power_on_counter');
+      expect(objectIdFromName('Salt Cartridge Age (Days)'), 'salt_cartridge_age__days_');
+    });
+
     test('climate command sets has_* flags', () {
       final (type, data) = Requests.climateCommand(7, target: 102);
       expect(type, MsgId.climateCommand);

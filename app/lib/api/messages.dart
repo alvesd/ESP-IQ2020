@@ -52,6 +52,8 @@ abstract final class MsgId {
 const int apiVersionMajor = 1;
 const int apiVersionMinor = 10;
 
+String objectIdFromName(String name) => name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+
 enum EntityKind { binarySensor, sensor, textSensor, switch_, fan, climate, number, select, button, text }
 
 enum EntityCategory { none, config, diagnostic }
@@ -144,11 +146,20 @@ class EntityInfo {
       v >= 0 && v < EntityCategory.values.length ? EntityCategory.values[v] : EntityCategory.none;
 
   /// Decodes a ListEntities*Response, or returns null for entity types the app ignores.
+  static const _listTypes = {
+    MsgId.listBinarySensor, MsgId.listSensor, MsgId.listTextSensor, MsgId.listSwitch, MsgId.listFan,
+    MsgId.listClimate, MsgId.listNumber, MsgId.listSelect, MsgId.listButton, MsgId.listText,
+  };
+
   static EntityInfo? fromList(int msgType, Uint8List data) {
+    if (!_listTypes.contains(msgType)) return null;
     final m = ProtoMessage.decode(data);
-    final objectId = m.string(1);
     final key = m.fixed32(2);
     final name = m.string(3);
+    // Newer ESPHome no longer sends object_id; derive it from the name the same way ESPHome
+    // does ("Power On Counter" -> "power_on_counter").
+    final sentId = m.string(1);
+    final objectId = sentId.isNotEmpty ? sentId : objectIdFromName(name);
     switch (msgType) {
       case MsgId.listBinarySensor:
         return EntityInfo(kind: EntityKind.binarySensor, key: key, objectId: objectId, name: name,
@@ -227,7 +238,13 @@ class EntityState {
   });
 
   /// Decodes a *StateResponse message, or returns null if [msgType] is not a state message.
+  static const _stateTypes = {
+    MsgId.binarySensorState, MsgId.sensorState, MsgId.textSensorState, MsgId.switchState, MsgId.fanState,
+    MsgId.climateState, MsgId.numberState, MsgId.selectState, MsgId.textState,
+  };
+
   static EntityState? fromState(int msgType, Uint8List data) {
+    if (!_stateTypes.contains(msgType)) return null;
     final m = ProtoMessage.decode(data);
     final key = m.fixed32(1);
     switch (msgType) {

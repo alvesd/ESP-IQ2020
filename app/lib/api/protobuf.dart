@@ -118,13 +118,20 @@ class ProtoMessage {
 
   Object? _last(int f) => _fields[f]?.last;
 
-  int uint(int f) => (_last(f) as int?) ?? 0;
+  /// Last scalar value of field [f]; a field with an unexpected wire type reads as absent
+  /// (proto3 default) instead of throwing, so unknown/changed messages never kill the connection.
+  int? _scalar(int f) {
+    final v = _last(f);
+    return v is int ? v : null;
+  }
+
+  int uint(int f) => _scalar(f) ?? 0;
   int int32(int f) => uint(f).toSigned(32);
   bool boolean(int f) => uint(f) != 0;
-  int fixed32(int f) => (_last(f) as int?) ?? 0;
+  int fixed32(int f) => _scalar(f) ?? 0;
 
   double float32(int f) {
-    final raw = _last(f) as int?;
+    final raw = _scalar(f);
     if (raw == null) return 0;
     return (ByteData(4)..setUint32(0, raw, Endian.little)).getFloat32(0, Endian.little);
   }

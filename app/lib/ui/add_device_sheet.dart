@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api/noise.dart';
 import '../device_store.dart';
@@ -18,6 +19,17 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
   late final TextEditingController _host;
   late final TextEditingController _port;
   late final TextEditingController _key;
+  bool _showKey = false;
+
+  Future<void> _pasteKey() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text?.trim() ?? '';
+    if (text.isEmpty) return;
+    // Accept a whole YAML line like `key: "abc..="` as well as the bare key.
+    final match = RegExp(r'[A-Za-z0-9+/]{42,43}=').firstMatch(text);
+    _key.text = match?.group(0) ?? text;
+    _form.currentState?.validate();
+  }
 
   @override
   void initState() {
@@ -87,10 +99,22 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
               decoration: InputDecoration(
                 labelText: 'API encryption key',
                 helperText: needsKey ? 'api.encryption.key from the ESPHome YAML' : 'Device is not encrypted',
+                suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    tooltip: 'Paste',
+                    icon: const Icon(Icons.content_paste),
+                    onPressed: _pasteKey,
+                  ),
+                  IconButton(
+                    tooltip: _showKey ? 'Hide' : 'Show',
+                    icon: Icon(_showKey ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _showKey = !_showKey),
+                  ),
+                ]),
               ),
               autocorrect: false,
               enableSuggestions: false,
-              obscureText: true,
+              obscureText: !_showKey,
               validator: (v) {
                 final s = (v ?? '').trim();
                 if (s.isEmpty) return needsKey ? 'Required for this device' : null;
