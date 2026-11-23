@@ -1,0 +1,26 @@
+name: iq2020_mobile
+description: Direct (no Home Assistant) iPhone/Android control for IQ2020 hot tubs running the ESP-IQ2020 ESPHome firmware.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # X25519 / ChaCha20-Poly1305 / SHA-256 / HMAC for the ESPHome Noise handshake.
+  cryptography: ^2.7.0
+  # mDNS discovery of _esphomelib._tcp (works on iOS without the multicast entitlement).
+  bonsoir: ^5.1.10
+  # Keychain / Keystore storage for API encryption keys.
+  flutter_secure_storage: ^9.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
