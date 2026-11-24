@@ -1,0 +1,5 @@
+// Watch app version = the iPhone app's (Flutter writes FLUTTER_BUILD_NAME/NUMBER from
+// app/pubspec.yaml into Generated.xcconfig); App Store Connect requires them to match.
+#include? "../Flutter/Generated.xcconfig"
+MARKETING_VERSION = $(FLUTTER_BUILD_NAME)
+CURRENT_PROJECT_VERSION = $(FLUTTER_BUILD_NUMBER)

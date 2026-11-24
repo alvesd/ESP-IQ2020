@@ -10,6 +10,7 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    WatchRelay.shared.activate()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

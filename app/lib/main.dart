@@ -5,6 +5,9 @@ import 'device_store.dart';
 import 'ui/home_screen.dart';
 import 'ui/spa_backdrop.dart';
 
+// Compiled into the app so WatchRelay.swift's headless engine can start it (Apple Watch relay).
+export 'watch/watch_relay.dart' show watchRelayMain;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = DeviceStore();

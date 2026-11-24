@@ -47,7 +47,12 @@ class DeviceStore extends ChangeNotifier {
   final FlutterSecureStorage _storage;
   List<SavedDevice> devices = [];
 
-  DeviceStore({FlutterSecureStorage? storage}) : _storage = storage ?? const FlutterSecureStorage();
+  // After first unlock (not "while unlocked"): the Apple Watch relay reads the key while the
+  // iPhone is locked in a pocket. Still device-only, so it never syncs to iCloud.
+  static const _iosOptions = IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device);
+
+  DeviceStore({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage(iOptions: _iosOptions);
 
   Future<void> load() async {
     final raw = await _storage.read(key: _storageKey);
@@ -55,9 +60,17 @@ class DeviceStore extends ChangeNotifier {
       devices = [
         for (final j in jsonDecode(raw) as List<dynamic>) SavedDevice.fromJson(j as Map<String, dynamic>),
       ];
+      // Items saved by older builds were "while unlocked"; rewriting moves them to the options
+      // above (the plugin replaces the item when only its accessibility differs).
+      if (!_migrated) {
+        _migrated = true;
+        await _storage.write(key: _storageKey, value: raw);
+      }
     }
     notifyListeners();
   }
+
+  static bool _migrated = false;
 
   Future<void> upsert(SavedDevice d) async {
     devices = [...devices.where((e) => e.id != d.id), d];

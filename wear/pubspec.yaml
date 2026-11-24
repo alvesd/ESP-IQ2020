@@ -1,0 +1,24 @@
+name: iq2020_wear
+description: IQ2020 Spa for Wear OS. Talks to the hot tub's ESPHome API directly, reusing the phone app's client.
+publish_to: none
+# Keep in step with app/pubspec.yaml. Gradle adds 100000 to the build number so the watch APK's
+# version code never collides with the phone app's in the shared Play listing.
+version: 0.1.0+2
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The phone app's Noise/protobuf client, device store and watch snapshot.
+  iq2020_mobile:
+    path: ../app
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
