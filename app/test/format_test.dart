@@ -31,4 +31,18 @@ void main() {
     expect(formatDuration(double.nan, 's'), '—');
     expect(formatDuration(12, 'W'), '12 W');
   });
+
+  test('saltZone matches the panel zones', () {
+    expect(saltZone(double.nan), isNull);
+    expect(saltZone(0)!.$1, 'Too low');
+    expect(saltZone(23)!.$1, 'Too low');
+    expect(saltZone(24)!.$1, 'Low');
+    expect(saltZone(35)!.$1, 'Low');
+    expect(saltZone(36)!.$1, 'Good');
+    expect(saltZone(83)!.$1, 'Good');
+    expect(saltZone(84)!.$1, 'High');
+    expect(saltZone(96)!.$1, 'Too high');
+    expect(saltZone(120)!.$1, 'Too high');
+    expect(saltZone(150)!.$1, 'Too high');
+  });
 }

@@ -253,9 +253,19 @@ class _SpaScreenState extends State<SpaScreen> {
             for (final e in g.lights) _LightTile(client: c, info: e, run: _run),
           ]),
         ],
-        if (g.switches.isNotEmpty) ...[
+        // Salt boost and production level lead Spa settings (they also stay on the Salt tab).
+        if (g.switches.isNotEmpty || g.saltControls.isNotEmpty) ...[
           const _Section('Spa settings'),
-          _TileGrid(children: [for (final e in g.switches) _ToggleTile(client: c, info: e, run: _run)]),
+          for (final e in g.saltAdjustments)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: e.kind == EntityKind.number
+                  ? _NumberRow(client: c, info: e, run: _run, tile: true)
+                  : Card(margin: EdgeInsets.zero, child: _GenericRow(client: c, info: e, run: _run)),
+            ),
+          _TileGrid(children: [
+            for (final e in [...g.saltSwitches, ...g.switches]) _ToggleTile(client: c, info: e, run: _run),
+          ]),
         ],
         if (g.comfortSensors.isNotEmpty) ...[
           const _Section('Water'),
@@ -357,6 +367,8 @@ class _EntityGroups {
   late final List<EntityInfo> comfortSensors, powerSensors, usageSensors;
   // Freshwater / ACE salt system: everything with "salt" in its id gets its own tab.
   late final List<EntityInfo> saltSensors, saltStatus, saltControls, saltButtons;
+  List<EntityInfo> get saltSwitches => saltControls.where((e) => e.kind == EntityKind.switch_).toList();
+  List<EntityInfo> get saltAdjustments => saltControls.where((e) => e.kind != EntityKind.switch_).toList();
   bool get hasSalt =>
       saltSensors.isNotEmpty || saltStatus.isNotEmpty || saltControls.isNotEmpty || saltButtons.isNotEmpty;
 
@@ -405,7 +417,28 @@ bool isUsageSensor(EntityInfo e) {
   return id.contains('runtime') || id.contains('counter') || id.endsWith('_hours') || id.contains('days');
 }
 
-/// Headline salt reading with any salt status flags (e.g. "Salt Level Confirmed") underneath.
+/// Freshwater salt display scale (0-120) split into the zones the spa panel colours.
+const double saltScaleMax = 120;
+const _saltRed = Color(0xFFE5484D), _saltYellow = Color(0xFFF5B83D), _saltGreen = Color(0xFF30A46C);
+const _saltZones = <(double, double, String, Color)>[
+  (0, 24, 'Too low', _saltRed),
+  (24, 36, 'Low', _saltYellow),
+  (36, 84, 'Good', _saltGreen),
+  (84, 96, 'High', _saltYellow),
+  (96, saltScaleMax, 'Too high', _saltRed),
+];
+
+/// Zone label and colour for a salt reading, or null when there is no reading yet.
+(String, Color)? saltZone(double v) {
+  if (v.isNaN) return null;
+  for (final z in _saltZones) {
+    if (v < z.$2) return (z.$3, z.$4);
+  }
+  return (_saltZones.last.$3, _saltZones.last.$4);
+}
+
+/// Headline salt reading as a zoned radial gauge, with any salt status flags
+/// (e.g. "Salt Level Confirmed") underneath. Read-only: salt is raised by adding salt.
 class _SaltLevelCard extends StatelessWidget {
   final EspHomeClient client;
   final EntityInfo info;
@@ -415,22 +448,115 @@ class _SaltLevelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final value = client.states[info.key]?.number ?? double.nan;
+    final zone = saltZone(value);
+    final muted = theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
         child: Column(children: [
           Row(children: [
-            Icon(Icons.water_drop, color: theme.colorScheme.primary),
+            Icon(Icons.water_drop, color: zone?.$2 ?? theme.colorScheme.primary),
             const SizedBox(width: 6),
             Text(info.name, style: theme.textTheme.labelLarge),
           ]),
-          const SizedBox(height: 8),
-          Text(_sensorText(client, info), style: theme.textTheme.displayMedium),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: AspectRatio(
+              aspectRatio: 1.15,
+              child: CustomPaint(
+                painter: _SaltGaugePainter(value: value, track: theme.colorScheme.onSurface),
+                child: Stack(children: [
+                  Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(_fmt(value, 0),
+                            style: theme.textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w300, fontSize: 60)),
+                      ),
+                      if (zone != null)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                              color: zone.$2.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+                          child: Text(zone.$1,
+                              style: theme.textTheme.labelLarge?.copyWith(color: zone.$2, fontWeight: FontWeight.w600)),
+                        ),
+                    ]),
+                  ),
+                  Align(alignment: const Alignment(-0.62, 0.95), child: Text('0', style: muted)),
+                  Align(alignment: const Alignment(0.62, 0.95), child: Text(_fmt(saltScaleMax, 0), style: muted)),
+                ]),
+              ),
+            ),
+          ),
           for (final e in status) _StatusRow(client: client, info: e),
         ]),
       ),
     );
   }
+}
+
+/// 270° gauge like the temperature dial: the five salt zones as a dim coloured track, the
+/// part up to the reading in full colour, and a knob ringed in the current zone's colour.
+class _SaltGaugePainter extends CustomPainter {
+  final double value;
+  final Color track;
+  _SaltGaugePainter({required this.value, required this.track});
+
+  static const double _start = 3 * pi / 4, _sweep = 3 * pi / 2;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 14.0, gap = 0.025; // radians between zones
+    final radius = (size.shortestSide / 2) - stroke;
+    final c = size.center(Offset.zero);
+    final rect = Rect.fromCircle(center: c, radius: radius);
+    double angle(double v) => _start + _sweep * (v / saltScaleMax).clamp(0.0, 1.0);
+    Paint arc(Color color) => Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke;
+
+    for (final z in _saltZones) {
+      final a0 = angle(z.$1) + (z.$1 > 0 ? gap / 2 : 0);
+      final a1 = angle(z.$2) - (z.$2 < saltScaleMax ? gap / 2 : 0);
+      canvas.drawArc(rect, a0, a1 - a0, false, arc(z.$4.withValues(alpha: 0.25)));
+      if (!value.isNaN && value > z.$1) {
+        final end = min(a1, angle(value));
+        canvas.drawArc(rect, a0, end - a0, false, arc(z.$4));
+      }
+    }
+
+    // Tick marks at the zone boundaries.
+    final tick = Paint()
+      ..color = track.withValues(alpha: 0.35)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    for (final z in _saltZones.skip(1)) {
+      final a = angle(z.$1);
+      final dir = Offset(cos(a), sin(a));
+      canvas.drawLine(c + dir * (radius - stroke - 4), c + dir * (radius - stroke - 10), tick);
+    }
+
+    final zone = saltZone(value);
+    if (zone != null) {
+      final a = angle(value);
+      final p = c + Offset(cos(a), sin(a)) * radius;
+      canvas.drawCircle(p, stroke * 0.95, Paint()..color = Colors.black.withValues(alpha: 0.18));
+      canvas.drawCircle(p, stroke * 0.85, Paint()..color = Colors.white);
+      canvas.drawCircle(
+          p,
+          stroke * 0.55,
+          Paint()
+            ..color = zone.$2
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SaltGaugePainter old) => old.value != value || old.track != track;
 }
 
 class _EmptyTab extends StatelessWidget {
@@ -1216,7 +1342,9 @@ class _NumberRow extends StatefulWidget {
   final EspHomeClient client;
   final EntityInfo info;
   final _Runner run;
-  const _NumberRow({required this.client, required this.info, required this.run});
+  /// tile: a full-width card styled like [_ToggleTile] (Comfort tab) instead of a list row.
+  final bool tile;
+  const _NumberRow({required this.client, required this.info, required this.run, this.tile = false});
   @override
   State<_NumberRow> createState() => _NumberRowState();
 }
@@ -1233,22 +1361,48 @@ class _NumberRowState extends State<_NumberRow> {
     final raw = _drag ?? s?.number ?? min;
     final value = (raw.isNaN ? min : raw).clamp(min, max).toDouble();
     final divisions = ((max - min) / info.step).round();
-    return ListTile(
-      leading: Icon(_iconFor(info)),
-      title: Text(info.name),
-      subtitle: Slider(
-        min: min,
-        max: max,
-        divisions: divisions > 0 && divisions <= 200 ? divisions : null,
-        value: value,
-        label: _fmt(value, info.step < 1 ? 1 : 0),
-        onChanged: widget.client.status == ConnectionStatus.connected ? (v) => setState(() => _drag = v) : null,
-        onChangeEnd: (v) {
-          setState(() => _drag = null);
-          widget.run(() => widget.client.setNumber(info.key, v));
-        },
+    final text = '${_fmt(value, info.step < 1 ? 1 : 0)}${info.unit}';
+    final slider = Slider(
+      min: min,
+      max: max,
+      divisions: divisions > 0 && divisions <= 200 ? divisions : null,
+      value: value,
+      label: text,
+      onChanged: widget.client.status == ConnectionStatus.connected ? (v) => setState(() => _drag = v) : null,
+      onChangeEnd: (v) {
+        setState(() => _drag = null);
+        widget.run(() => widget.client.setNumber(info.key, v));
+      },
+    );
+    if (!widget.tile) {
+      return ListTile(leading: Icon(_iconFor(info)), title: Text(info.name), subtitle: slider, trailing: Text(text));
+    }
+    final theme = Theme.of(context);
+    final accent = _accentFor(info);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            _IconBadge(icon: _iconFor(info), color: accent, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(info.name,
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            Text(text, style: theme.textTheme.titleLarge?.copyWith(color: accent, fontWeight: FontWeight.w600)),
+          ]),
+          SliderTheme(
+            // Default side padding insets the track well past the icon and value; line them up.
+            data: SliderTheme.of(context).copyWith(
+                activeTrackColor: accent, thumbColor: accent, padding: const EdgeInsets.fromLTRB(12, 18, 12, 18)),
+            child: slider,
+          ),
+        ]),
       ),
-      trailing: Text('${_fmt(value, info.step < 1 ? 1 : 0)}${info.unit}'),
     );
   }
 }
