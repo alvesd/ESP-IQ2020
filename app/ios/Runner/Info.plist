@@ -30,6 +30,8 @@
 	<array>
 		<string>_esphomelib._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Scans the setup code your Wear OS watch shows, to send it your hot tub.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Finds and controls your hot tub on your home Wi-Fi.</string>
 	<key>UIApplicationSceneManifest</key>

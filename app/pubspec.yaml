@@ -16,6 +16,7 @@ dependencies:
   bonsoir: ^5.1.10
   # Keychain / Keystore storage for API encryption keys.
   flutter_secure_storage: ^9.2.2
+  mobile_scanner: ^7.5.0
 
 dev_dependencies:
   flutter_test:

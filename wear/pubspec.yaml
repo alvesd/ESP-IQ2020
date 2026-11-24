@@ -14,6 +14,7 @@ dependencies:
   # The phone app's Noise/protobuf client, device store and watch snapshot.
   iq2020_mobile:
     path: ../app
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

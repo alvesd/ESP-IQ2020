@@ -2,6 +2,7 @@
 // jets, lights) and the salt zone. The watch connects to the hot tub itself over Wi-Fi with the
 // phone app's ESPHome client, so it works without the phone nearby.
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:iq2020_mobile/api/esphome_client.dart';
@@ -9,6 +10,8 @@ import 'package:iq2020_mobile/device_store.dart';
 import 'package:iq2020_mobile/main.dart' show Iq2020App, SpaColors;
 import 'package:iq2020_mobile/ui/spa_screen.dart' as ui show saltZone;
 import 'package:iq2020_mobile/watch/spa_snapshot.dart';
+import 'package:iq2020_mobile/watch/watch_pairing.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,8 +44,8 @@ EdgeInsets _roundInsets(BuildContext context) {
   return EdgeInsets.symmetric(horizontal: s.width * 0.11, vertical: s.height * 0.12);
 }
 
-/// First run: host name and API key. On a watch the key is easiest to enter with the phone's
-/// keyboard, which Wear OS offers when the text field opens.
+/// First run. Easiest: "Set up from phone" shows a QR code that the phone app scans and answers
+/// with the saved hot tub over Wi-Fi (lib/watch/watch_pairing.dart). Manual host + key below.
 class SetupScreen extends StatefulWidget {
   final DeviceStore store;
   const SetupScreen({super.key, required this.store});
@@ -77,11 +80,98 @@ class _SetupScreenState extends State<SetupScreen> {
         children: [
           Text('Add hot tub', textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => PairFromPhoneScreen(store: widget.store)),
+            ),
+            icon: const Icon(Icons.qr_code_2),
+            label: const Text('Set up from phone'),
+          ),
+          const SizedBox(height: 8),
+          Text('Or enter it here', textAlign: TextAlign.center, style: theme.textTheme.labelSmall),
           TextField(controller: _host, decoration: const InputDecoration(labelText: 'Host'), keyboardType: TextInputType.url),
           TextField(controller: _key, decoration: const InputDecoration(labelText: 'API key'), obscureText: true),
           const SizedBox(height: 12),
           FilledButton(onPressed: _save, child: const Text('Save')),
         ],
+      ),
+    );
+  }
+}
+
+/// Shows a one-time QR code; the phone app scans it and sends the saved hot tub.
+class PairFromPhoneScreen extends StatefulWidget {
+  final DeviceStore store;
+  const PairFromPhoneScreen({super.key, required this.store});
+  @override
+  State<PairFromPhoneScreen> createState() => _PairFromPhoneScreenState();
+}
+
+class _PairFromPhoneScreenState extends State<PairFromPhoneScreen> {
+  PairingListener? _listener;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  Future<void> _start() async {
+    setState(() => _error = null);
+    try {
+      final l = await PairingListener.start();
+      if (!mounted) return await l.close();
+      setState(() => _listener = l);
+      final device = await l.received;
+      await widget.store.upsert(device);
+      if (mounted) Navigator.of(context).pop();
+    } on TimeoutException {
+      if (mounted) setState(() => _error = 'Code expired');
+    } on SocketException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _listener?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context).shortestSide;
+    final l = _listener;
+    return Scaffold(
+      body: Center(
+        child: _error != null
+            ? Padding(
+                padding: _roundInsets(context),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(_error!, textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+                  TextButton(onPressed: _start, child: const Text('Try again')),
+                ]),
+              )
+            : l == null
+                ? const CircularProgressIndicator()
+                : Column(mainAxisSize: MainAxisSize.min, children: [
+                    // White quiet zone so phone cameras read it off a dark watch face.
+                    Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.all(6),
+                      child: QrImageView(data: l.code.encode(), size: size * 0.56, padding: EdgeInsets.zero),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: size * 0.7,
+                      child: Text('Phone app: ⋯ › Set up watch',
+                          textAlign: TextAlign.center, style: theme.textTheme.labelSmall),
+                    ),
+                  ]),
       ),
     );
   }

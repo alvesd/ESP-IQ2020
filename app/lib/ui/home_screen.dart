@@ -4,6 +4,7 @@ import '../device_store.dart';
 import 'add_device_sheet.dart';
 import 'spa_backdrop.dart';
 import 'spa_screen.dart';
+import 'watch_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final DeviceStore store;
@@ -78,9 +79,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     onSelected: (v) async {
                       if (v == 'edit') await _add(edit: d);
                       if (v == 'remove') await widget.store.remove(d.id);
+                      if (v == 'watch' && context.mounted) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => WatchSetupScreen(device: d)),
+                        );
+                      }
                     },
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'edit', child: Text('Edit')),
+                      PopupMenuItem(value: 'watch', child: Text('Set up watch')),
                       PopupMenuItem(value: 'remove', child: Text('Remove')),
                     ],
                   ),
