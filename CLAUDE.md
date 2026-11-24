@@ -51,7 +51,10 @@ cd app && flutter build apk --debug          # build/app/outputs/flutter-apk/app
 /opt/homebrew/share/android-commandlinetools/emulator/emulator -avd iq2020_pixel &
 cd app && flutter run -d emulator-5554
 ```
-Release signing for Google Play (upload keystore, `.aab`, Play Console app) isn't set up yet.
+Google Play: the app "IQ2020 Spa" is in the owner's Play Console with an Internal testing track and the "IQ2020 Spa testers" email list. Release builds sign with the upload key named in the git-ignored `android/key.properties` (keystore `~/.android-keys/iq2020-upload.jks`). Without that file they fall back to the debug key, which works for sideloaded APKs but Play rejects it. Play App Signing holds the app-signing key. Bump the `+N` build number in `pubspec.yaml`, then:
+```bash
+cd app && flutter build appbundle --release   # build/app/outputs/bundle/release/app-release.aab -> Play Console, Internal testing
+```
 
 Talking to a real device from the command line (independent of the Dart client): `pip install aioesphomeapi` then `aioesphomeapi-logs --noise-psk '<key>' hot-tub.local`.
 
