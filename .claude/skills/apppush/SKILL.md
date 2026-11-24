@@ -56,12 +56,17 @@ and push it.
 ```bash
 cd app && flutter build ios --release --no-codesign
 cd app/ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configuration Release \
-  -sdk iphoneos -archivePath ../build/ios/archive/Runner.xcarchive \
+  -destination generic/platform=iOS -archivePath ../build/ios/archive/Runner.xcarchive \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO archive
 cd app && rm -rf build/ios/upload && xcodebuild -exportArchive \
   -archivePath build/ios/archive/Runner.xcarchive -exportPath build/ios/upload \
   -exportOptionsPlist ios/ExportOptionsUpload.plist -allowProvisioningUpdates
 ```
+
+Use `-destination`, not `-sdk iphoneos`: the archive embeds the Apple Watch app
+(`IQ2020Watch`), and forcing the iPhone SDK makes its build fail ("app icon set … did not have
+any applicable content"). Check `Runner.app/Watch/IQ2020Watch.app` is in the archive and its
+`CFBundleVersion` matches the iPhone app's.
 
 Success = "Upload succeeded" / "EXPORT SUCCEEDED". Processing takes 5–15 min; the owner
 answers export compliance in App Store Connect. The Internal TestFlight group gets it
@@ -91,6 +96,10 @@ Never print `key.properties`. Upload in Chrome (Play Console account **Alvesd**,
 4. Next → check "Ready to release" with no errors → Save and publish → confirm.
 
 Success = the track shows the new release "Available to internal testers".
+
+The Wear OS app (`wear/`, same package, version code 100000+N) is not shipped by this skill
+until the Wear OS form factor is enabled for the listing in Play Console; then build it with
+`cd wear && flutter build appbundle --release` and add it to a Wear OS release.
 Opt-in link: https://play.google.com/apps/internaltest/4699945925693455410
 
 ## Safety
