@@ -97,9 +97,21 @@ Never print `key.properties`. Upload in Chrome (Play Console account **Alvesd**,
 
 Success = the track shows the new release "Available to internal testers".
 
-The Wear OS app (`wear/`, same package, version code 100000+N) is not shipped by this skill
-until the Wear OS form factor is enabled for the listing in Play Console; then build it with
-`cd wear && flutter build appbundle --release` and add it to a Wear OS release.
+## 7. Wear OS → Play Wear internal testing
+
+The Wear OS form factor is on; the Wear track is Internal testing with the form-factor menu set
+to **Wear OS only** (`tracks/internal-testing?releaseType=wear`). Bump `wear/pubspec.yaml` too
+(version code = 100000 + N), then `cd wear && flutter build appbundle --release`, check the signer,
+and upload it the same way as step 6.
+
+- Before publishing, check the review page's **Wearable** row: "Devices no longer supported" must
+  be 0. The Wear app inherits the phone app's plugins; its manifest marks the camera
+  (`mobile_scanner`) not required and removes the CAMERA permission. Confirm with
+  `aapt2 dump badging <wear apk> | grep feature` (camera must be `uses-feature-not-required`).
+- An uploaded version code is used up even if you remove it from the draft. Removing a bundle from
+  a draft is flaky: after publishing, expand the release summary and check **Version codes**.
+  The release *name* is auto-filled from the first bundle uploaded and may show an older code.
+
 Opt-in link: https://play.google.com/apps/internaltest/4699945925693455410
 
 ## Safety

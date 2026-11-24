@@ -1,5 +1,11 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-feature android:name="android.hardware.type.watch"/>
+    <!-- The phone app's QR scanner (mobile_scanner) comes along through the shared Dart package
+         and would make Play hide the app from watches without a camera (nearly all). The watch
+         only shows the code; it never uses a camera. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" tools:replace="android:required"/>
+    <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
