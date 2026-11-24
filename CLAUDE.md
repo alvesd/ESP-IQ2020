@@ -45,6 +45,14 @@ cd app/ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -configura
 cd app && xcodebuild -exportArchive -archivePath build/ios/archive/Runner.xcarchive -exportPath build/ios/upload -exportOptionsPlist ios/ExportOptionsUpload.plist -allowProvisioningUpdates   # ios/ExportOptions.plist = local .ipa only
 ```
 
+Android (same Flutter code; package `com.alvesd.iq2020Mobile`). Flutter is configured for the SDK at `/opt/homebrew/share/android-commandlinetools` and Homebrew `openjdk@17`. `android/build.gradle.kts` raises library plugins to compileSdk 36, because `bonsoir_android` 5.x compiles against API 33. Android has no native tab bar, so Flutter draws the navigation: a bottom bar on phones, a right-side rail when wide.
+```bash
+cd app && flutter build apk --debug          # build/app/outputs/flutter-apk/app-debug.apk
+/opt/homebrew/share/android-commandlinetools/emulator/emulator -avd iq2020_pixel &
+cd app && flutter run -d emulator-5554
+```
+Release signing for Google Play (upload keystore, `.aab`, Play Console app) isn't set up yet.
+
 Talking to a real device from the command line (independent of the Dart client): `pip install aioesphomeapi` then `aioesphomeapi-logs --noise-psk '<key>' hot-tub.local`.
 
 ## Firmware architecture (components/iq2020)
