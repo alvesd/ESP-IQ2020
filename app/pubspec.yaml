@@ -1,7 +1,7 @@
 name: iq2020_mobile
 description: Direct (no Home Assistant) iPhone/Android control for IQ2020 hot tubs running the ESP-IQ2020 ESPHome firmware.
 publish_to: none
-version: 0.1.0+2
+version: 0.1.0+3
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
