@@ -186,6 +186,18 @@ switch:
     id: summer_timer_switch
     icon: "mdi:sun-clock"
     datapoint: 4
+  - platform: iq2020                # MOBILE: Freshwater salt boost (app Salt tab)
+    name: Salt Boost
+    id: salt_boost_switch
+    icon: "mdi:rocket-launch"
+    datapoint: 8
+
+number:
+  - platform: iq2020                # MOBILE: Freshwater salt production level 1-10 (app Salt tab)
+    name: Salt System Power
+    id: salt_power
+    icon: "mdi:water-plus"
+    datapoint: 5
 
 fan:
   - platform: iq2020
