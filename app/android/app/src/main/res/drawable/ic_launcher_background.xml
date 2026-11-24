@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive icon background: the night-spa teal gradient (app/tool/make_icons.swift). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient android:angle="270" android:startColor="#0E3A45" android:endColor="#061419" />
+</shape>
