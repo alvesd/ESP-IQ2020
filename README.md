@@ -1,3 +1,44 @@
+# ESP-IQ2020: phone and watch apps
+
+This is a fork of [Ylianst/ESP-IQ2020](https://github.com/Ylianst/ESP-IQ2020). It adds apps for iPhone, Android, Apple Watch and Wear OS that control an IQ2020 hot tub **directly** through the ESP32, with no Home Assistant and no cloud.
+
+```
+Spa IQ2020 board ──RS485── ESP32 (ESPHome + iq2020 component) ──Wi-Fi, encrypted ESPHome API──► phone / watch app
+```
+
+Home Assistant was only ever one client of ESPHome's native API. The app talks to the same ESP32 and the same entities, so anything Home Assistant could control, the app can too.
+
+<p align="center">
+  <img src="documentation/images/app-comfort.png" width="250" alt="Comfort tab: water temperature dial, set point, jets and lights">
+  <img src="documentation/images/app-salt.png" width="250" alt="Salt tab: salt level gauge and cartridge status">
+  <img src="documentation/images/app-power.png" width="250" alt="Power tab: controller, heater and pump power">
+</p>
+
+**What the fork adds**
+
+- **Phone app** ([`app/`](app/), Flutter, iOS and Android). It finds the hot tub on your Wi-Fi and connects with the API encryption key.
+  - Temperature dial with −/+ set point, jets, lights, and the spa settings.
+  - Power and usage readings.
+  - A Salt tab for Freshwater salt systems.
+  - The screens are built from whatever entities the ESP32 reports, so spas with different jets, °F/°C, salt, Coolzone or audio all work.
+  - Phones and tablets are supported: on wide screens the navigation becomes a side rail.
+- **Apple Watch app** ([`app/ios/IQ2020Watch/`](app/ios/IQ2020Watch/)). It shows the water and target temperature, heater state, jets, lights and salt level, and gets them from the iPhone app.
+- **Wear OS app** ([`wear/`](wear/)). It shows the same single screen and connects to the hot tub itself over Wi-Fi. You set it up from the phone app with a QR code.
+- **Firmware for running without Home Assistant** ([`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml)):
+  - `api.reboot_timeout: 0s`, so the ESP32 doesn't reboot when no client is connected.
+  - SNTP time instead of Home Assistant time.
+  - Freshwater salt production level and boost.
+
+The [`components/iq2020`](components/iq2020/) ESPHome component is identical to upstream, so the fork can keep merging upstream updates.
+
+**Getting started:** flash the ESP32 with [`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml), then build the app as described in [`app/README.md`](app/README.md).
+
+The apps only work on your home network. For remote access, use a VPN such as Tailscale or WireGuard. Never port-forward the ESPHome API port.
+
+The rest of this README is the original upstream documentation for the hardware, wiring and the Home Assistant setup.
+
+---
+
 # ESP-IQ2020
 -- Only compatible with 2014 spas and newer, [look at the exact list here](https://github.com/Ylianst/ESP-IQ2020/blob/main/documentation/tested.md#list-of-models-compatible-with-ace-77401-controller) --
 
