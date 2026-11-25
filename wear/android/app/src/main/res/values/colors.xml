@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SpaColors.ink in lib/main.dart: matches the iOS launch screen and the app's night theme. -->
+    <color name="spa_ink">#061419</color>
+</resources>

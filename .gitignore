@@ -249,3 +249,7 @@ ModelManifest.xml
 
 **/.history
 
+
+# Mobile fork
+firmware/secrets.yaml
+firmware/.esphome/
