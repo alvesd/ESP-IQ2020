@@ -56,7 +56,12 @@ class WatchRelay {
     }
   }
 
-  SpaSnapshot _snapshot() => SpaSnapshot.fromClient(_client!, name: _device!.name);
+  SpaSnapshot _snapshot() => SpaSnapshot.fromClient(
+        _client!,
+        name: _device!.name,
+        heatUpTempC: _device!.heatUpTempC,
+        vacationTempC: _device!.vacationTempC,
+      );
 
   /// The client for the first saved spa, connected and with its states loaded, or null when the
   /// phone has no spa saved.
@@ -74,6 +79,8 @@ class WatchRelay {
         encryptionKey: device.encryptionKey.isEmpty ? null : device.encryptionKey,
         clientInfo: 'IQ2020 Watch relay',
       )..addListener(_schedulePush);
+    } else {
+      _device = device;
     }
     final client = _client!;
     await client.connect();

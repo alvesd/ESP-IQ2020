@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:iq2020_mobile/api/esphome_client.dart';
 import 'package:iq2020_mobile/device_store.dart';
 import 'package:iq2020_mobile/main.dart' show Iq2020App, SpaColors;
+import 'package:iq2020_mobile/ui/heating_eta.dart';
+import 'package:iq2020_mobile/ui/salt_shaker_icon.dart';
 import 'package:iq2020_mobile/ui/spa_screen.dart' as ui show saltZone;
 import 'package:iq2020_mobile/watch/spa_snapshot.dart';
 import 'package:iq2020_mobile/watch/watch_pairing.dart';
@@ -194,7 +196,9 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
   );
   double? _pendingTarget;
   Timer? _debounce;
+  Timer? _etaTick;
   final Set<int> _busy = {};
+  final HeatingEtaTracker _eta = HeatingEtaTracker();
 
   @override
   void initState() {
@@ -207,8 +211,21 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
+    _etaTick?.cancel();
     _client.dispose();
     super.dispose();
+  }
+
+  void _syncEtaTimer(bool active) {
+    if (!active) {
+      _etaTick?.cancel();
+      _etaTick = null;
+      return;
+    }
+    if (_etaTick?.isActive ?? false) return;
+    _etaTick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   // The ESP32 allows only a few API connections: free ours whenever the watch screen is off.
@@ -227,6 +244,20 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  void _setTargetImmediate(SpaSnapshot snap, double value, {required bool isHeatUp}) {
+    _debounce?.cancel();
+    setState(() => _pendingTarget = value);
+    if (isHeatUp) {
+      _eta.start(currentTemp: snap.current ?? double.nan, targetTemp: value, now: DateTime.now());
+    } else {
+      _eta.reset();
+    }
+    _run(() => applyWatchCommand(_client, snap, {'op': 'setTarget', 'value': value}));
+    Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _pendingTarget = null);
+    });
   }
 
   void _nudge(SpaSnapshot snap, int steps) {
@@ -254,7 +285,12 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
         body: ListenableBuilder(
           listenable: _client,
           builder: (context, _) {
-            final snap = SpaSnapshot.fromClient(_client, name: widget.device.name);
+            final snap = SpaSnapshot.fromClient(
+              _client,
+              name: widget.device.name,
+              heatUpTempC: widget.device.heatUpTempC,
+              vacationTempC: widget.device.vacationTempC,
+            );
             return _body(context, snap);
           },
         ),
@@ -266,6 +302,25 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
     String fmt(double? v) => v == null ? '—' : v.toStringAsFixed(snap.step < 1 ? 1 : 0);
     final target = _pendingTarget ?? snap.target;
     final canControl = snap.online && snap.climateKey != null && target != null;
+    final tol = snap.unit == '°F' ? 0.45 : 0.2;
+    final heatUpActive = target != null && (target - snap.heatUpTemp).abs() < tol;
+    final vacationActive = target != null && (target - snap.vacationTemp).abs() < tol;
+    final current = snap.current ?? double.nan;
+    final now = DateTime.now();
+    final isFahrenheit = snap.unit == '°F';
+    _eta.update(
+      currentTemp: current,
+      targetTemp: snap.heatUpTemp,
+      active: heatUpActive && !current.isNaN && current < snap.heatUpTemp - 0.05,
+      isFahrenheit: isFahrenheit,
+      now: now,
+    );
+    final eta = heatUpActive
+        ? _eta.estimate(currentTemp: current, targetTemp: snap.heatUpTemp, isFahrenheit: isFahrenheit, now: now)
+        : null;
+    final heatUpReached = heatUpActive && (eta?.reached ?? false);
+    _syncEtaTimer(heatUpActive && !heatUpReached && !current.isNaN);
+
     final (heaterLabel, heaterColor) = switch (snap.heater) {
       'heating' => ('Heating', const Color(0xFFFF8A4C)),
       'cooling' => ('Cooling', const Color(0xFF4FC3F7)),
@@ -301,6 +356,10 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
           padding: EdgeInsets.zero,
         );
 
+    final etaTimeText = (eta?.readyAt == null)
+        ? '${fmt(snap.heatUpTemp)}${snap.unit}'
+        : MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(eta!.readyAt!));
+
     return ListView(
       padding: _roundInsets(context),
       children: [
@@ -321,7 +380,33 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
           ]),
           roundButton(Icons.add, canControl ? () => _nudge(snap, 1) : null),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: _WearPresetChip(
+              icon: heatUpReached ? Icons.check_circle : Icons.local_fire_department,
+              title: heatUpReached
+                  ? 'Ready'
+                  : (heatUpActive ? (eta!.calibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up'),
+              subtitle: heatUpReached ? 'At ${fmt(snap.heatUpTemp)}${snap.unit}' : etaTimeText,
+              accent: heatUpReached ? const Color(0xFF30A46C) : const Color(0xFFFF8A4C),
+              active: heatUpActive,
+              onTap: canControl ? () => _setTargetImmediate(snap, snap.heatUpTemp, isHeatUp: true) : null,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _WearPresetChip(
+              icon: Icons.flight_takeoff,
+              title: 'Vacation',
+              subtitle: vacationActive ? 'On · ${fmt(snap.vacationTemp)}${snap.unit}' : '${fmt(snap.vacationTemp)}${snap.unit}',
+              accent: SpaColors.aqua,
+              active: vacationActive,
+              onTap: canControl ? () => _setTargetImmediate(snap, snap.vacationTemp, isHeatUp: false) : null,
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
         for (final t in snap.toggles)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
@@ -331,8 +416,57 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
               onTap: snap.online ? () => _toggle(snap, t) : null,
             ),
           ),
-        if (snap.salt != null) _SaltRow(salt: snap.salt!),
+        if (snap.salt != null || snap.saltPower != null || snap.saltBoost) _SaltRow(snap: snap),
       ],
+    );
+  }
+}
+
+class _WearPresetChip extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final bool active;
+  final VoidCallback? onTap;
+  const _WearPresetChip({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: active ? accent.withValues(alpha: 0.24) : SpaColors.glass,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: active ? accent : SpaColors.glassBorder),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(children: [
+            Icon(icon, size: 15, color: active ? accent : theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: active ? accent : theme.colorScheme.onSurfaceVariant)),
+              ]),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }
@@ -373,22 +507,52 @@ class _ToggleChip extends StatelessWidget {
 }
 
 class _SaltRow extends StatelessWidget {
-  final double salt;
-  const _SaltRow({required this.salt});
+  final SpaSnapshot snap;
+  const _SaltRow({required this.snap});
 
   @override
   Widget build(BuildContext context) {
-    final zone = ui.saltZone(salt);
+    final salt = snap.salt;
+    final zone = salt == null ? null : ui.saltZone(salt);
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(Icons.water_drop, size: 16, color: zone?.$2),
-        const SizedBox(width: 6),
-        Text('Salt ${salt.toStringAsFixed(0)}', style: theme.textTheme.labelLarge),
-        if (zone != null) ...[
-          const SizedBox(width: 6),
-          Text(zone.$1, style: theme.textTheme.labelLarge?.copyWith(color: zone.$2, fontWeight: FontWeight.w600)),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (salt != null || snap.saltPower != null)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (salt != null) ...[
+                SaltShakerIcon(size: 14, color: zone?.$2 ?? theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 5),
+                Text('Salt ${salt.toStringAsFixed(0)}', style: theme.textTheme.labelMedium),
+                if (zone != null) ...[
+                  const SizedBox(width: 4),
+                  Text(zone.$1, style: theme.textTheme.labelMedium?.copyWith(color: zone.$2, fontWeight: FontWeight.w600)),
+                ],
+              ],
+              if (salt != null && snap.saltPower != null)
+                Text('  ·  ', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+              if (snap.saltPower != null)
+                Text('Pwr ${snap.saltPower}',
+                    style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            ]),
+          ),
+        if (snap.saltBoost) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF38D9F5).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFF7CEBFF).withValues(alpha: 0.7)),
+            ),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.bolt, size: 12, color: Color(0xFFD8F8FF)),
+              SizedBox(width: 2),
+              Text('Boost On', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFFD8F8FF))),
+            ]),
+          ),
         ],
       ]),
     );

@@ -8,11 +8,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SavedDevice {
+  static const double defaultHeatUpTempC = (102 - 32) * 5 / 9;
+  static const double defaultVacationTempC = (85 - 32) * 5 / 9;
+
   final String id; // ESPHome node name, e.g. "hot-tub"
   final String name;
   final String host;
   final int port;
   final String encryptionKey;
+  final double heatUpTempC;
+  final double vacationTempC;
 
   const SavedDevice({
     required this.id,
@@ -20,18 +25,37 @@ class SavedDevice {
     required this.host,
     this.port = 6053,
     this.encryptionKey = '',
+    this.heatUpTempC = defaultHeatUpTempC,
+    this.vacationTempC = defaultVacationTempC,
   });
 
-  SavedDevice copyWith({String? name, String? host, int? port, String? encryptionKey}) => SavedDevice(
+  SavedDevice copyWith({
+    String? name,
+    String? host,
+    int? port,
+    String? encryptionKey,
+    double? heatUpTempC,
+    double? vacationTempC,
+  }) =>
+      SavedDevice(
         id: id,
         name: name ?? this.name,
         host: host ?? this.host,
         port: port ?? this.port,
         encryptionKey: encryptionKey ?? this.encryptionKey,
+        heatUpTempC: heatUpTempC ?? this.heatUpTempC,
+        vacationTempC: vacationTempC ?? this.vacationTempC,
       );
 
-  Map<String, Object> toJson() =>
-      {'id': id, 'name': name, 'host': host, 'port': port, 'key': encryptionKey};
+  Map<String, Object> toJson() => {
+        'id': id,
+        'name': name,
+        'host': host,
+        'port': port,
+        'key': encryptionKey,
+        'heatUpTempC': heatUpTempC,
+        'vacationTempC': vacationTempC,
+      };
 
   factory SavedDevice.fromJson(Map<String, dynamic> j) => SavedDevice(
         id: j['id'] as String,
@@ -39,6 +63,8 @@ class SavedDevice {
         host: j['host'] as String,
         port: (j['port'] as num?)?.toInt() ?? 6053,
         encryptionKey: (j['key'] as String?) ?? '',
+        heatUpTempC: (j['heatUpTempC'] as num?)?.toDouble() ?? defaultHeatUpTempC,
+        vacationTempC: (j['vacationTempC'] as num?)?.toDouble() ?? defaultVacationTempC,
       );
 }
 

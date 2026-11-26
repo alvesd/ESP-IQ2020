@@ -60,6 +60,8 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
       host: host,
       port: int.parse(_port.text.trim()),
       encryptionKey: _key.text.trim(),
+      heatUpTempC: widget.existing?.heatUpTempC ?? SavedDevice.defaultHeatUpTempC,
+      vacationTempC: widget.existing?.vacationTempC ?? SavedDevice.defaultVacationTempC,
     ));
   }
 

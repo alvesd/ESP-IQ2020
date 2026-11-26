@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import '../api/esphome_client.dart';
 import '../api/messages.dart';
 import '../device_store.dart';
+import 'heating_eta.dart';
+import 'logo_light_badge.dart';
 import 'native_tabs.dart';
 import 'salt_shaker_icon.dart';
 
@@ -59,10 +61,11 @@ class _SpaScreenState extends State<SpaScreen> {
     super.dispose();
   }
 
-  late String _name = widget.device.name;
+  SavedDevice get _device => widget.store.devices.where((d) => d.id == widget.device.id).firstOrNull ?? widget.device;
 
   Future<void> _rename() async {
-    final controller = TextEditingController(text: _name);
+    final currentName = _device.name;
+    final controller = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -82,11 +85,13 @@ class _SpaScreenState extends State<SpaScreen> {
     );
     controller.dispose();
     final trimmed = newName?.trim() ?? '';
-    if (trimmed.isEmpty || trimmed == _name) return;
+    if (trimmed.isEmpty || trimmed == currentName) return;
     // Only the app's label changes; the ESPHome device name (and Home Assistant) are untouched.
-    await widget.store.upsert(widget.device.copyWith(name: trimmed));
-    if (mounted) setState(() => _name = trimmed);
+    await widget.store.upsert(_device.copyWith(name: trimmed));
   }
+
+  Future<void> _updatePresetTemp({double? heatUpTempC, double? vacationTempC}) =>
+      widget.store.upsert(_device.copyWith(heatUpTempC: heatUpTempC, vacationTempC: vacationTempC));
 
   void _run(Future<void> Function() action) {
     action().catchError((Object e) {
@@ -144,7 +149,7 @@ class _SpaScreenState extends State<SpaScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: _client,
+      listenable: Listenable.merge([_client, widget.store]),
       builder: (context, _) {
         final c = _client;
         final groups = _EntityGroups(c);
@@ -191,7 +196,7 @@ class _SpaScreenState extends State<SpaScreen> {
 
           return Scaffold(
             appBar: AppBar(
-              title: Text(_name),
+              title: Text(_device.name),
               actions: [
                 IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: _rename),
                 _StatusChip(client: c),
@@ -253,7 +258,19 @@ class _SpaScreenState extends State<SpaScreen> {
   }
 
   List<Widget> _comfortPage(EspHomeClient c, _EntityGroups g) => [
-        for (final e in g.climates) _ClimateCard(client: c, info: e, run: _run),
+        for (final e in g.climates)
+          _ClimateCard(
+            client: c,
+            info: e,
+            run: _run,
+            logoLight: g.logoLight,
+            saltLevel: g.saltLevelSensor,
+            saltPower: g.saltPowerNumber,
+            saltBoost: g.saltBoostSwitch,
+            onTapSalt: g.hasSalt ? () => setState(() => _tab = 'Salt') : null,
+            heatUpTempC: _device.heatUpTempC,
+            vacationTempC: _device.vacationTempC,
+          ),
         if (g.fans.isNotEmpty || g.lights.isNotEmpty) ...[
           _Section(g.fans.isNotEmpty && g.lights.isNotEmpty ? 'Jets & Lights' : (g.fans.isNotEmpty ? 'Jets' : 'Lights')),
           _TileGrid(children: [
@@ -293,8 +310,7 @@ class _SpaScreenState extends State<SpaScreen> {
       ];
 
   List<Widget> _saltPage(EspHomeClient c, _EntityGroups g) {
-    EntityInfo? find(String id) => g.saltSensors.where((e) => e.objectId == id).firstOrNull;
-    final level = find('salt_level') ?? find('salt_content');
+    final level = g.saltLevelSensor;
     final others = g.saltSensors.where((e) => e != level).toList();
     return [
       if (level != null) _SaltLevelCard(client: c, info: level, status: g.saltStatus),
@@ -315,42 +331,83 @@ class _SpaScreenState extends State<SpaScreen> {
     ];
   }
 
-  List<Widget> _settingsPage(EspHomeClient c, _EntityGroups g) => [
-        // On/off spa settings live on the Comfort tab; only adjustable values remain here.
-        if (g.selects.isNotEmpty || g.numbers.isNotEmpty) ...[
-          const _Section('Adjustments'),
-          _cardColumn([
-            for (final e in g.selects) _SelectRow(client: c, info: e, run: _run),
-            for (final e in g.numbers) _NumberRow(client: c, info: e, run: _run),
-          ]),
-        ],
-        if (g.status.isNotEmpty || g.buttons.isNotEmpty) ...[
-          const _Section('Status & maintenance'),
-          _cardColumn([
-            for (final e in g.status) _StatusRow(client: c, info: e),
-            for (final e in g.buttons) _ButtonRow(client: c, info: e, run: _run),
-          ]),
-        ],
-        if (g.config.isNotEmpty || c.deviceInfo != null)
-          Card(
-            margin: const EdgeInsets.only(top: 16),
-            child: ExpansionTile(
-              title: const Text('Device & diagnostics'),
-              children: [
-                for (final e in g.config) _GenericRow(client: c, info: e, run: _run),
-                if (c.deviceInfo != null) ...[
-                  ListTile(dense: true, title: const Text('ESPHome'), trailing: Text(c.deviceInfo!.esphomeVersion)),
-                  ListTile(dense: true, title: const Text('MAC'), trailing: Text(c.deviceInfo!.macAddress)),
-                  if (c.deviceInfo!.projectVersion.isNotEmpty)
-                    ListTile(
-                        dense: true,
-                        title: const Text('Firmware'),
-                        trailing: Text('${c.deviceInfo!.projectName} ${c.deviceInfo!.projectVersion}')),
-                ],
+  List<Widget> _settingsPage(EspHomeClient c, _EntityGroups g) {
+    final f = c.entities.values.any((e) => e.kind == EntityKind.sensor && e.unit == '°F');
+    final climate = g.climates.firstOrNull;
+    final minC = climate?.minValue ?? ((79 - 32) * 5 / 9);
+    final maxC = (climate == null || climate.maxValue <= climate.minValue) ? 40.0 : climate.maxValue;
+    final stepDisplay = f ? 1.0 : (climate?.step ?? 0.5);
+    double toDisplay(double celsius) => f ? celsius * 9 / 5 + 32 : celsius;
+    double toCelsius(double disp) => f ? (disp - 32) * 5 / 9 : disp;
+    final minDisp = toDisplay(minC);
+    final maxDisp = toDisplay(maxC);
+    final unit = f ? '°F' : '°C';
+    final decimals = (!f && stepDisplay < 1) ? 1 : 0;
+    double snapDisp(double v) => ((v / stepDisplay).round() * stepDisplay).clamp(minDisp, maxDisp).toDouble();
+
+    final heatUpDisp = snapDisp(toDisplay(_device.heatUpTempC));
+    final vacationDisp = snapDisp(toDisplay(_device.vacationTempC));
+
+    return [
+      const _Section('Temperature presets'),
+      _cardColumn([
+        _PresetTempRow(
+          icon: Icons.local_fire_department,
+          accent: _heatColor,
+          title: 'Heat Up temperature',
+          valueText: '${_fmt(heatUpDisp, decimals)}$unit',
+          canDecrease: heatUpDisp > minDisp + stepDisplay * 0.1,
+          canIncrease: heatUpDisp < maxDisp - stepDisplay * 0.1,
+          onDecrease: () => unawaited(_updatePresetTemp(heatUpTempC: toCelsius(snapDisp(heatUpDisp - stepDisplay)))),
+          onIncrease: () => unawaited(_updatePresetTemp(heatUpTempC: toCelsius(snapDisp(heatUpDisp + stepDisplay)))),
+        ),
+        _PresetTempRow(
+          icon: Icons.flight_takeoff,
+          accent: _jetsColor,
+          title: 'Vacation temperature',
+          valueText: '${_fmt(vacationDisp, decimals)}$unit',
+          canDecrease: vacationDisp > minDisp + stepDisplay * 0.1,
+          canIncrease: vacationDisp < maxDisp - stepDisplay * 0.1,
+          onDecrease: () => unawaited(_updatePresetTemp(vacationTempC: toCelsius(snapDisp(vacationDisp - stepDisplay)))),
+          onIncrease: () => unawaited(_updatePresetTemp(vacationTempC: toCelsius(snapDisp(vacationDisp + stepDisplay)))),
+        ),
+      ]),
+      // On/off spa settings live on the Comfort tab; only adjustable values remain here.
+      if (g.selects.isNotEmpty || g.numbers.isNotEmpty) ...[
+        const _Section('Adjustments'),
+        _cardColumn([
+          for (final e in g.selects) _SelectRow(client: c, info: e, run: _run),
+          for (final e in g.numbers) _NumberRow(client: c, info: e, run: _run),
+        ]),
+      ],
+      if (g.status.isNotEmpty || g.buttons.isNotEmpty) ...[
+        const _Section('Status & maintenance'),
+        _cardColumn([
+          for (final e in g.status) _StatusRow(client: c, info: e),
+          for (final e in g.buttons) _ButtonRow(client: c, info: e, run: _run),
+        ]),
+      ],
+      if (g.config.isNotEmpty || c.deviceInfo != null)
+        Card(
+          margin: const EdgeInsets.only(top: 16),
+          child: ExpansionTile(
+            title: const Text('Device & diagnostics'),
+            children: [
+              for (final e in g.config) _GenericRow(client: c, info: e, run: _run),
+              if (c.deviceInfo != null) ...[
+                ListTile(dense: true, title: const Text('ESPHome'), trailing: Text(c.deviceInfo!.esphomeVersion)),
+                ListTile(dense: true, title: const Text('MAC'), trailing: Text(c.deviceInfo!.macAddress)),
+                if (c.deviceInfo!.projectVersion.isNotEmpty)
+                  ListTile(
+                      dense: true,
+                      title: const Text('Firmware'),
+                      trailing: Text('${c.deviceInfo!.projectName} ${c.deviceInfo!.projectVersion}')),
               ],
-            ),
+            ],
           ),
-      ];
+        ),
+    ];
+  }
 }
 
 /// Splits the device's entities into the tabs. Pure function of the entity list, so it adapts
@@ -358,10 +415,20 @@ class _SpaScreenState extends State<SpaScreen> {
 class _EntityGroups {
   late final List<EntityInfo> climates, fans, lights, switches, selects, numbers, status, buttons, config;
   late final List<EntityInfo> comfortSensors, powerSensors, usageSensors;
+  late final EntityInfo? logoLight;
   // Freshwater / ACE salt system: everything with "salt" in its id gets its own tab.
   late final List<EntityInfo> saltSensors, saltStatus, saltControls, saltButtons;
   List<EntityInfo> get saltSwitches => saltControls.where((e) => e.kind == EntityKind.switch_).toList();
   List<EntityInfo> get saltAdjustments => saltControls.where((e) => e.kind != EntityKind.switch_).toList();
+  EntityInfo? get saltLevelSensor =>
+      saltSensors.where((e) => e.objectId == 'salt_level' || e.objectId == 'salt_content').firstOrNull;
+  EntityInfo? get saltPowerNumber =>
+      saltControls
+          .where((e) => e.kind == EntityKind.number && (e.objectId.contains('power') || e.objectId.contains('output')))
+          .firstOrNull ??
+      saltControls.where((e) => e.kind == EntityKind.number).firstOrNull;
+  EntityInfo? get saltBoostSwitch =>
+      saltControls.where((e) => e.kind == EntityKind.switch_ && e.objectId.contains('boost')).firstOrNull;
   bool get hasSalt =>
       saltSensors.isNotEmpty || saltStatus.isNotEmpty || saltControls.isNotEmpty || saltButtons.isNotEmpty;
 
@@ -376,6 +443,10 @@ class _EntityGroups {
     saltButtons = salt({EntityKind.button});
 
     final visible = all.where((e) => !isSalt(e));
+    final logoCandidates =
+        visible.where((e) => e.objectId.contains('logo_light') && !e.objectId.contains('raw')).toList();
+    logoLight = logoCandidates.where((e) => e.kind == EntityKind.textSensor).firstOrNull ??
+        logoCandidates.where((e) => e.kind == EntityKind.sensor).firstOrNull;
     List<EntityInfo> kind(EntityKind k, {bool main = true}) =>
         sorted(visible.where((e) => e.kind == k && ((e.category == EntityCategory.none) == main)));
 
@@ -396,6 +467,7 @@ class _EntityGroups {
     usageSensors = [];
     comfortSensors = [];
     for (final e in kind(EntityKind.sensor)) {
+      if (e == logoLight) continue;
       if (isPowerSensor(e)) {
         powerSensors.add(e);
       } else if (isUsageSensor(e)) {
@@ -461,21 +533,25 @@ class _GaugeBody extends StatelessWidget {
   final Widget center;
   final String minLabel, maxLabel;
   final TextStyle? labelStyle;
+  final Alignment centerAlignment;
+  final double labelHorizontalAlignment;
   const _GaugeBody({
     required this.painter,
     required this.center,
     required this.minLabel,
     required this.maxLabel,
     required this.labelStyle,
+    this.centerAlignment = Alignment.center,
+    this.labelHorizontalAlignment = 0.62,
   });
 
   @override
   Widget build(BuildContext context) => CustomPaint(
         painter: painter,
         child: Stack(children: [
-          Center(child: center),
-          Align(alignment: const Alignment(-0.62, 0.95), child: Text(minLabel, style: labelStyle)),
-          Align(alignment: const Alignment(0.62, 0.95), child: Text(maxLabel, style: labelStyle)),
+          Align(alignment: centerAlignment, child: center),
+          Align(alignment: Alignment(-labelHorizontalAlignment, 0.95), child: Text(minLabel, style: labelStyle)),
+          Align(alignment: Alignment(labelHorizontalAlignment, 0.95), child: Text(maxLabel, style: labelStyle)),
         ]),
       );
 }
@@ -810,7 +886,25 @@ class _ClimateCard extends StatefulWidget {
   final EspHomeClient client;
   final EntityInfo info;
   final _Runner run;
-  const _ClimateCard({required this.client, required this.info, required this.run});
+  final EntityInfo? logoLight;
+  final EntityInfo? saltLevel;
+  final EntityInfo? saltPower;
+  final EntityInfo? saltBoost;
+  final VoidCallback? onTapSalt;
+  final double heatUpTempC;
+  final double vacationTempC;
+  const _ClimateCard({
+    required this.client,
+    required this.info,
+    required this.run,
+    this.logoLight,
+    this.saltLevel,
+    this.saltPower,
+    this.saltBoost,
+    this.onTapSalt,
+    this.heatUpTempC = SavedDevice.defaultHeatUpTempC,
+    this.vacationTempC = SavedDevice.defaultVacationTempC,
+  });
   @override
   State<_ClimateCard> createState() => _ClimateCardState();
 }
@@ -818,11 +912,26 @@ class _ClimateCard extends StatefulWidget {
 class _ClimateCardState extends State<_ClimateCard> {
   double? _pendingTarget;
   Timer? _debounce;
+  Timer? _etaTick;
+  final HeatingEtaTracker _eta = HeatingEtaTracker();
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _etaTick?.cancel();
     super.dispose();
+  }
+
+  void _syncEtaTimer(bool shouldTick) {
+    if (!shouldTick) {
+      _etaTick?.cancel();
+      _etaTick = null;
+      return;
+    }
+    if (_etaTick?.isActive ?? false) return;
+    _etaTick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   // ESPHome always reports climate temperatures in °C over the API (Home Assistant converts for
@@ -842,28 +951,114 @@ class _ClimateCardState extends State<_ClimateCard> {
 
   double _stepFor(bool f) => f ? 1.0 : widget.info.step;
 
+  double _snapToRange(double displayValue, bool f) {
+    final step = _stepFor(f);
+    final (lo, hi) = _rangeFor(f);
+    return ((displayValue / step).round() * step).clamp(lo, hi).toDouble();
+  }
+
   /// [current] and the pending target are in display units.
   void _nudge(double current, int direction, bool f) =>
       _setTarget((_pendingTarget ?? current) + direction * _stepFor(f), f);
 
-  /// Snaps [value] (display units) to the step and range, shows it, and sends it after a pause.
-  void _setTarget(double value, [bool? fahrenheit]) {
+  /// Snaps [value] (display units) to the step and range, shows it, and sends it either
+  /// immediately (preset buttons) or after a short debounce (stepper / dial).
+  void _setTarget(double value, [bool? fahrenheit, bool immediate = false]) {
     final info = widget.info;
     final f = fahrenheit ?? _fahrenheit;
-    final step = _stepFor(f);
-    final (lo, hi) = _rangeFor(f);
-    final next = ((value / step).round() * step).clamp(lo, hi).toDouble();
-    if (next == _pendingTarget) return;
+    final next = _snapToRange(value, f);
+    if (!immediate && next == _pendingTarget) return;
     setState(() => _pendingTarget = next);
-    // The spa remote also debounces; send one command after the user stops tapping.
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 700), () {
+    void send() {
       widget.run(() => widget.client.setClimate(info.key, target: _toCelsius(next, f)));
       Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _pendingTarget = null);
       });
-    });
+    }
+
+    _debounce?.cancel();
+    if (immediate) {
+      send();
+    } else {
+      // The spa remote also debounces; send one command after the user stops tapping.
+      _debounce = Timer(const Duration(milliseconds: 700), send);
+    }
   }
+
+  Widget _buildSaltOverlay({
+    required double saltVal,
+    required (String, Color)? zone,
+    required double powerVal,
+  }) =>
+      Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: widget.onTapSalt,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              SaltShakerIcon(size: 13, color: Colors.white.withValues(alpha: 0.88)),
+              if (!saltVal.isNaN) ...[
+                const SizedBox(width: 5),
+                if (zone != null) ...[
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(color: zone.$2, shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  zone == null ? '${saltVal.round()}' : '${saltVal.round()} · ${zone.$1}',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+              ],
+              if (!saltVal.isNaN && !powerVal.isNaN)
+                Container(
+                  width: 1,
+                  height: 10,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
+                  color: Colors.white.withValues(alpha: 0.28),
+                ),
+              if (!powerVal.isNaN)
+                Text(
+                  'Pwr ${powerVal.round()}',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+            ]),
+          ),
+        ),
+      );
+
+  Widget _buildBoostOverlay() => Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: widget.onTapSalt,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: const Color(0xFF38D9F5).withValues(alpha: 0.26),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFF7CEBFF).withValues(alpha: 0.75)),
+            ),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.bolt, size: 12, color: Color(0xFFD8F8FF)),
+              SizedBox(width: 2),
+              Text(
+                'Boost On',
+                style: TextStyle(color: Color(0xFFD8F8FF), fontSize: 10, fontWeight: FontWeight.w600, letterSpacing: 0.2),
+              ),
+            ]),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -894,6 +1089,40 @@ class _ClimateCardState extends State<_ClimateCard> {
         ? action.$3
         : [Color.lerp(heat, deep, 0.15)!, Color.lerp(heat, deep, 0.55)!];
 
+    // Salt gauge telemetry
+    final saltVal =
+        widget.saltLevel == null ? double.nan : (widget.client.states[widget.saltLevel!.key]?.number ?? double.nan);
+    final zone = saltZone(saltVal);
+    final saltPowerVal =
+        widget.saltPower == null ? double.nan : (widget.client.states[widget.saltPower!.key]?.number ?? double.nan);
+    final saltBoostOn =
+        widget.saltBoost != null && (widget.client.states[widget.saltBoost!.key]?.boolValue ?? false);
+    final saltOverlay = (!saltVal.isNaN || !saltPowerVal.isNaN)
+        ? _buildSaltOverlay(saltVal: saltVal, zone: zone, powerVal: saltPowerVal)
+        : null;
+    final boostOverlay = saltBoostOn ? _buildBoostOverlay() : null;
+
+    // Heat Up + Vacation presets & live rate-of-rise Ready ETA
+    final heatUpTarget = _snapToRange(_toDisplay(widget.heatUpTempC, f), f);
+    final vacationTarget = _snapToRange(_toDisplay(widget.vacationTempC, f), f);
+    final presetTol = f ? 0.45 : 0.2;
+    final heatUpActive = !target.isNaN && (target - heatUpTarget).abs() < presetTol;
+    final vacationActive = !target.isNaN && (target - vacationTarget).abs() < presetTol;
+    final now = DateTime.now();
+    _eta.update(
+      currentTemp: current,
+      targetTemp: heatUpTarget,
+      active: heatUpActive && !current.isNaN && current < heatUpTarget - 0.05,
+      isFahrenheit: f,
+      now: now,
+    );
+    final eta = heatUpActive
+        ? _eta.estimate(currentTemp: current, targetTemp: heatUpTarget, isFahrenheit: f, now: now)
+        : null;
+    final heatUpReached = heatUpActive && (eta?.reached ?? false);
+    final heatUpHeating = heatUpActive && !heatUpReached && (eta?.readyAt != null);
+    _syncEtaTimer(heatUpHeating);
+
     Widget roundButton(IconData icon, VoidCallback? onPressed) => Material(
           color: white.withValues(alpha: onPressed == null ? 0.10 : 0.22),
           shape: const CircleBorder(),
@@ -906,6 +1135,15 @@ class _ClimateCardState extends State<_ClimateCard> {
             icon: Icon(icon),
           ),
         );
+
+    final heatUpTitle = heatUpReached
+        ? 'Ready'
+        : (heatUpHeating ? (eta!.calibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up');
+    final heatUpSub = heatUpReached
+        ? 'At ${_fmt(heatUpTarget, decimals)}$unit'
+        : (heatUpHeating
+            ? MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(eta!.readyAt!))
+            : '${_fmt(heatUpTarget, decimals)}$unit');
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
@@ -928,19 +1166,42 @@ class _ClimateCardState extends State<_ClimateCard> {
           ),
         ),
         child: Column(children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(color: white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(action.$2, color: white, size: 16),
-                const SizedBox(width: 6),
-                Text(action.$1, style: theme.textTheme.labelMedium?.copyWith(color: white)),
-              ]),
-            ),
-            const Spacer(),
-            Text(info.name, style: theme.textTheme.labelLarge?.copyWith(color: white.withValues(alpha: 0.85))),
-          ]),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(20)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(action.$2, color: white, size: 16),
+                  const SizedBox(width: 6),
+                  Text(action.$1, style: theme.textTheme.labelMedium?.copyWith(color: white)),
+                ]),
+              ),
+              const SizedBox(width: 8),
+              if (widget.logoLight != null)
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.topRight,
+                    child: Builder(builder: (_) {
+                      final logoState = widget.client.states[widget.logoLight!.key];
+                      final customLabel =
+                          (logoState != null && !logoState.missing && logoState.text.trim().isNotEmpty)
+                              ? logoState.text.trim()
+                              : null;
+                      return LogoLightBadge(
+                        state: parseLogoLightState(logoState),
+                        customLabel: customLabel,
+                      );
+                    }),
+                  ),
+                )
+              else ...[
+                const Spacer(),
+                Text(info.name, style: theme.textTheme.labelLarge?.copyWith(color: white.withValues(alpha: 0.85))),
+              ],
+            ],
+          ),
           const SizedBox(height: 8),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 300),
@@ -951,6 +1212,8 @@ class _ClimateCardState extends State<_ClimateCard> {
               target: target,
               enabled: enabled,
               onDrag: _setTarget,
+              saltOverlay: saltOverlay,
+              boostOverlay: boostOverlay,
               center: Column(mainAxisSize: MainAxisSize.min, children: [
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -982,6 +1245,46 @@ class _ClimateCardState extends State<_ClimateCard> {
                 ]),
               ),
               roundButton(Icons.add, enabled ? () => _nudge(target, 1, f) : null),
+            ]),
+          ),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: Row(children: [
+              Expanded(
+                child: _PresetButton(
+                  icon: heatUpReached ? Icons.check_circle : Icons.local_fire_department,
+                  title: heatUpTitle,
+                  subtitle: heatUpSub,
+                  active: heatUpActive,
+                  activeAccent: heatUpReached ? const Color(0xFF17874B) : const Color(0xFFC93E24),
+                  progress: heatUpHeating ? eta!.progress : null,
+                  onTap: enabled
+                      ? () {
+                          _eta.start(currentTemp: current, targetTemp: heatUpTarget, now: DateTime.now());
+                          _setTarget(heatUpTarget, f, true);
+                        }
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _PresetButton(
+                  icon: Icons.flight_takeoff,
+                  title: 'Vacation',
+                  subtitle: vacationActive
+                      ? 'On · ${_fmt(vacationTarget, decimals)}$unit'
+                      : '${_fmt(vacationTarget, decimals)}$unit',
+                  active: vacationActive,
+                  activeAccent: const Color(0xFF175EA8),
+                  onTap: enabled
+                      ? () {
+                          _eta.reset();
+                          _setTarget(vacationTarget, f, true);
+                        }
+                      : null,
+                ),
+              ),
             ]),
           ),
           if (modes.length > 1) ...[
@@ -1020,6 +1323,100 @@ class _ClimateCardState extends State<_ClimateCard> {
   }
 }
 
+/// Quick preset button inside [_ClimateCard] for Heat Up (with optional rate-of-rise progress bar)
+/// and Vacation.
+class _PresetButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool active;
+  final Color activeAccent;
+  final double? progress;
+  final VoidCallback? onTap;
+  const _PresetButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.active,
+    required this.activeAccent,
+    this.progress,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = active ? Colors.white.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.16);
+    final border = active ? Colors.white : Colors.white.withValues(alpha: 0.28);
+    final fg = active ? activeAccent : Colors.white;
+    final iconBg = active ? activeAccent.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.2);
+
+    return Material(
+      color: bg,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: border),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Stack(children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+                child: Icon(icon, size: 16, color: fg),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: fg, fontSize: 12.5, fontWeight: FontWeight.w700, height: 1.15),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: active ? fg.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.85),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.15,
+                    ),
+                  ),
+                ]),
+              ),
+            ]),
+          ),
+          if (progress != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SizedBox(
+                height: 3,
+                child: ColoredBox(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: progress!.clamp(0.0, 1.0),
+                    child: ColoredBox(color: activeAccent),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
 /// Cool-to-hot scale used by the dial and the temperature card: blue at the bottom of the
 /// spa's range, through aqua and amber, to red-orange at the top.
 const _tempColors = [Color(0xFF3D7BFF), Color(0xFF22C3D6), Color(0xFFFFB347), Color(0xFFFF5A36)];
@@ -1045,6 +1442,8 @@ class _TempDial extends StatelessWidget {
   final ValueChanged<double> onDrag;
   final Widget center;
   final String minLabel, maxLabel;
+  final Widget? saltOverlay;
+  final Widget? boostOverlay;
   const _TempDial({
     required this.min,
     required this.max,
@@ -1055,6 +1454,8 @@ class _TempDial extends StatelessWidget {
     required this.center,
     required this.minLabel,
     required this.maxLabel,
+    this.saltOverlay,
+    this.boostOverlay,
   });
 
   double _valueAt(Offset local, Size size) {
@@ -1069,6 +1470,7 @@ class _TempDial extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.white.withValues(alpha: 0.75));
+    final hasBottomBadges = saltOverlay != null || boostOverlay != null;
     return AspectRatio(
       aspectRatio: 1.15,
       child: LayoutBuilder(builder: (context, constraints) {
@@ -1077,18 +1479,41 @@ class _TempDial extends StatelessWidget {
           if (enabled) onDrag(_valueAt(p, size));
         }
 
-        return GestureDetector(
-          onPanStart: (d) => drag(d.localPosition),
-          onPanUpdate: (d) => drag(d.localPosition),
-          onTapUp: (d) => drag(d.localPosition),
-          child: _GaugeBody(
-            painter: _TempDialPainter(min: min, max: max, current: current, target: target, enabled: enabled),
-            center: Padding(padding: const EdgeInsets.all(48), child: center),
-            minLabel: minLabel,
-            maxLabel: maxLabel,
-            labelStyle: labelStyle,
+        return Stack(children: [
+          GestureDetector(
+            onPanStart: (d) => drag(d.localPosition),
+            onPanUpdate: (d) => drag(d.localPosition),
+            onTapUp: (d) => drag(d.localPosition),
+            child: _GaugeBody(
+              painter: _TempDialPainter(min: min, max: max, current: current, target: target, enabled: enabled),
+              centerAlignment: hasBottomBadges ? const Alignment(0, -0.26) : Alignment.center,
+              labelHorizontalAlignment: hasBottomBadges ? 0.74 : 0.62,
+              center: Padding(
+                padding: EdgeInsets.fromLTRB(44, hasBottomBadges ? 18 : 48, 44, hasBottomBadges ? 46 : 48),
+                child: center,
+              ),
+              minLabel: minLabel,
+              maxLabel: maxLabel,
+              labelStyle: labelStyle,
+            ),
           ),
-        );
+          if (saltOverlay != null)
+            Align(
+              alignment: const Alignment(0, 0.56),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 38),
+                child: FittedBox(fit: BoxFit.scaleDown, child: saltOverlay!),
+              ),
+            ),
+          if (boostOverlay != null)
+            Align(
+              alignment: const Alignment(0, 0.94),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 56),
+                child: FittedBox(fit: BoxFit.scaleDown, child: boostOverlay!),
+              ),
+            ),
+        ]);
       }),
     );
   }
@@ -1510,4 +1935,55 @@ class _GenericRow extends StatelessWidget {
           ),
         _ => _StatusRow(client: client, info: info),
       };
+}
+
+class _PresetTempRow extends StatelessWidget {
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String valueText;
+  final bool canDecrease;
+  final bool canIncrease;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+
+  const _PresetTempRow({
+    required this.icon,
+    required this.accent,
+    required this.title,
+    required this.valueText,
+    required this.canDecrease,
+    required this.canIncrease,
+    required this.onDecrease,
+    required this.onIncrease,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListTile(
+      leading: _IconBadge(icon: icon, color: accent, size: 18),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.remove_circle_outline),
+          onPressed: canDecrease ? onDecrease : null,
+        ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 46),
+          child: Text(
+            valueText,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.add_circle_outline),
+          onPressed: canIncrease ? onIncrease : null,
+        ),
+      ]),
+    );
+  }
 }

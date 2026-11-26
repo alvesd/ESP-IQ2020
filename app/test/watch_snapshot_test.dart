@@ -22,12 +22,14 @@ EspHomeClient fakeSpa() {
   add(EntityInfo(kind: EntityKind.switch_, key: 5, objectId: 'spa_lock', name: 'Spa Lock'), const EntityState(key: 5));
   add(EntityInfo(kind: EntityKind.switch_, key: 6, objectId: 'salt_boost', name: 'Salt Boost'), const EntityState(key: 6, boolValue: true));
   add(EntityInfo(kind: EntityKind.sensor, key: 7, objectId: 'salt_level', name: 'Salt Level'), const EntityState(key: 7, number: 24));
+  add(EntityInfo(kind: EntityKind.number, key: 8, objectId: 'salt_system_power', name: 'Salt System Power', minValue: 1, maxValue: 10, step: 1),
+      const EntityState(key: 8, number: 5));
   c.status = ConnectionStatus.connected;
   return c;
 }
 
 void main() {
-  test('snapshot shows °F temperatures, heater, jets/lights and salt zone', () {
+  test('snapshot shows °F temperatures, heater, jets/lights, presets and salt details', () {
     final s = SpaSnapshot.fromClient(fakeSpa(), name: 'hotspring');
     expect(s.online, isTrue);
     expect(s.unit, '°F');
@@ -36,10 +38,14 @@ void main() {
     expect(s.min.round(), 79);
     expect(s.max.round(), 104);
     expect(s.step, 1);
+    expect(s.heatUpTemp.round(), 102);
+    expect(s.vacationTemp.round(), 85);
     expect(s.heater, 'heating');
     expect([for (final t in s.toggles) '${t.kind}:${t.name}:${t.on}'], ['fan:Jets 1:true', 'light:Lights:false']);
     expect(s.salt, 24);
     expect(s.saltZone, 'Low');
+    expect(s.saltPower, 5);
+    expect(s.saltBoost, isTrue);
   });
 
   test('nudged snaps and clamps to the range', () {

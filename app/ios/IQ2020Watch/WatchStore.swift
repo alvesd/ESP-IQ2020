@@ -20,10 +20,14 @@ struct SpaSnapshot: Equatable {
   let min: Double
   let max: Double
   let step: Double
+  let heatUpTemp: Double
+  let vacationTemp: Double
   let heater: String
   let toggles: [Toggle]
   let salt: Double?
   let saltZone: String?
+  let saltPower: Int?
+  let saltBoost: Bool
 
   init?(_ m: [String: Any]) {
     guard let name = m["name"] as? String else { return nil }
@@ -37,6 +41,8 @@ struct SpaSnapshot: Equatable {
     min = num("min") ?? 79
     max = num("max") ?? 104
     step = num("step") ?? 1
+    heatUpTemp = num("heatUpTemp") ?? (unit == "°F" ? 102 : 39)
+    vacationTemp = num("vacationTemp") ?? (unit == "°F" ? 85 : 29.5)
     heater = m["heater"] as? String ?? "off"
     toggles = (m["toggles"] as? [[String: Any]] ?? []).compactMap { t in
       guard let key = (t["key"] as? NSNumber)?.intValue, let name = t["name"] as? String else { return nil }
@@ -44,6 +50,8 @@ struct SpaSnapshot: Equatable {
     }
     salt = num("salt")
     saltZone = m["saltZone"] as? String
+    saltPower = (m["saltPower"] as? NSNumber)?.intValue
+    saltBoost = m["saltBoost"] as? Bool ?? false
   }
 
   /// Target moved by `steps`, snapped to the step and clamped to the range.
