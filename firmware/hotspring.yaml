@@ -239,9 +239,6 @@ sensor:
   - platform: uptime
     name: "ESP Uptime"
     entity_category: diagnostic
-  - platform: internal_temperature
-    name: "ESP Internal Temperature"
-    entity_category: diagnostic
 
 
 switch:
