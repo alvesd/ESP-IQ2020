@@ -108,10 +108,25 @@ sensor:
   # Power
     power_l1:
       name: Pumps Power
+      id: power_l1
     power_heater:
       name: Controller Power
+      id: power_heater
     power_l2:
       name: Heater Power
+      id: power_l2
+    voltage_l1:
+      name: Voltage L1
+    voltage_heater:
+      name: Voltage Controller
+    voltage_l2:
+      name: Voltage L2
+    current_l1:
+      name: Current L1
+    current_heater:
+      name: Current Controller
+    current_l2:
+      name: Current L2
     # ACE/Freshwater Salt
     salt_content:
       name: Salt Level
@@ -127,6 +142,20 @@ sensor:
     # Freshwater Salt only
     salt_error_code:
       name: Salt Error Code
+    # Freshwater IQ (water chemistry)
+    iq_chlorine:
+      name: IQ Chlorine
+      unit_of_measurement: "ppm"
+      icon: "mdi:flask"
+    iq_ph:
+      name: IQ pH
+      icon: "mdi:ph"
+    iq_orp:
+      name: IQ ORP
+    iq_hoursleft:
+      name: IQ Cartridge Hours Left
+      unit_of_measurement: "h"
+      icon: "mdi:timer-outline"
 
     #Lifetime counters
     lifetime_runtime:
@@ -144,20 +173,75 @@ sensor:
     jets1_total_runtime:
       name: Jets 1 Runtime
       id: jets1_total_runtime
-#      jet1_low_total_runtime:
-#      name: Jets 1 Low Runtime
-#      id: jets1_low_total_runtime
-    jets2_total_runtime:
-      name: Jets 2 Runtime
-      id: jets2_total_runtime
-    jet2_low_total_runtime:
-      name: Jets 2 Low Runtime
-      id: jets2_low_total_runtime
-#    jets3_total_runtime:
-#      name: Jets 3 Runtime
-#      id: jets3_total_runtime
     power_on_counter:
       name: Power On Counter
+
+    # Front cabinet logo LED (mapped to human-readable text in text_sensor)
+    logo_lights:
+      internal: true
+      name: Logo Lights Number
+      on_value:
+        then:
+          - text_sensor.template.publish:
+              id: logo_lights_text
+              state: !lambda 'return std::to_string(int(x));'
+    # Real-Time Clock
+    rtc_timestamp:
+      name: RTC Unix Timestamp
+
+  # Daily energy (resets at midnight via sntp_time)
+  - platform: total_daily_energy
+    name: Pumps Energy
+    power_id: power_l1
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+  - platform: total_daily_energy
+    name: Controller Energy
+    power_id: power_heater
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+  - platform: total_daily_energy
+    name: Heater Energy
+    power_id: power_l2
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  # ESP32 diagnostics
+  - platform: wifi_signal
+    name: "ESP WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "ESP WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    device_class: ""
+  - platform: uptime
+    name: "ESP Uptime"
+    entity_category: diagnostic
+  - platform: internal_temperature
+    name: "ESP Internal Temperature"
+    entity_category: diagnostic
 
 
 switch:
@@ -192,6 +276,22 @@ switch:
     icon: "mdi:rocket-launch"
     datapoint: 8
 
+select:
+  - platform: iq2020
+    name: Light Color
+    id: lights1_color
+    datapoint: 1
+    icon: "mdi:palette"
+    options:
+      - Violet
+      - Blue
+      - Cyan
+      - Green
+      - White
+      - Yellow
+      - Red
+      - Cycle
+
 number:
   - platform: iq2020                # MOBILE: Freshwater salt production level 1-10 (app Salt tab)
     name: Salt System Power
@@ -215,3 +315,24 @@ text_sensor:
   - platform: iq2020
     versionstr:
       name: Version
+    salt_module_status:
+      name: Salt Module Status
+    salt_level_friendly:
+      name: Salt Level Friendly
+    rtc_datetime:
+      name: Real Time Clock
+      entity_category: diagnostic
+  - platform: template
+    id: logo_lights_text
+    name: Logo Lights
+    icon: "mdi:led-on"
+    filters:
+      - map:
+        - "0 -> Unknown"
+        - "1 -> Power on"
+        - "2 -> Power on & ready on"
+        - "3 -> Ready flash"
+        - "4 -> Power flash"
+        - "5 -> Power and ready flash"
+        - "6 -> Power and ready alternate"
+        - "7 -> Power and ready salt error"
