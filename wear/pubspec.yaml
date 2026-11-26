@@ -3,7 +3,7 @@ description: IQ2020 Spa for Wear OS. Talks to the hot tub's ESPHome API directly
 publish_to: none
 # Keep in step with app/pubspec.yaml. Gradle adds 100000 to the build number so the watch APK's
 # version code never collides with the phone app's in the shared Play listing.
-version: 0.1.0+7
+version: 0.1.0+8
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

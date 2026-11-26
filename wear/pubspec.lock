@@ -230,7 +230,7 @@ packages:
       path: "../app"
       relative: true
     source: path
-    version: "0.1.0+7"
+    version: "0.1.0+8"
   jni:
     dependency: transitive
     description:
