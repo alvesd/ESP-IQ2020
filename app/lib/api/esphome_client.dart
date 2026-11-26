@@ -128,7 +128,6 @@ class _NoiseFrameHelper implements _FrameHelper {
   NoiseCipher? _enc;
   NoiseCipher? _dec;
   String serverName = '';
-  String serverMac = '';
 
   _NoiseFrameHelper(this._socket, this._reader, this._psk);
 
@@ -160,9 +159,7 @@ class _NoiseFrameHelper implements _FrameHelper {
     if (hello.isEmpty || hello[0] != 0x01) {
       throw ApiException('Unsupported Noise protocol from device');
     }
-    final parts = String.fromCharCodes(hello.sublist(1)).split('\u0000');
-    if (parts.isNotEmpty) serverName = parts[0];
-    if (parts.length > 1) serverMac = parts[1];
+    serverName = String.fromCharCodes(hello.sublist(1)).split('\u0000').first;
 
     final resp = await _readFrame();
     if (resp.isEmpty) throw ApiException('Empty handshake response');
@@ -283,8 +280,7 @@ class EspHomeClient extends ChangeNotifier {
 
       await _send(Requests.hello(clientInfo));
       await _send(Requests.authenticate());
-      final helloType = await _expectSetup(frames, MsgId.helloResponse);
-      if (helloType != MsgId.helloResponse) throw ApiException('No HelloResponse');
+      await _expectSetup(frames, MsgId.helloResponse);
 
       await _send(Requests.empty(MsgId.deviceInfoRequest));
       entities.clear();
@@ -306,17 +302,15 @@ class EspHomeClient extends ChangeNotifier {
       _startPing();
       unawaited(_readLoop(frames));
     } catch (e) {
-      lastError = e is ApiException ? e.message : e.toString();
-      _teardown(ConnectionStatus.failed);
-      _scheduleReconnect();
+      _fail(e is ApiException ? e.message : e.toString());
     }
   }
 
   /// Reads setup-phase messages until [wanted] arrives, answering pings meanwhile.
-  Future<int> _expectSetup(_FrameHelper frames, int wanted) async {
+  Future<void> _expectSetup(_FrameHelper frames, int wanted) async {
     while (true) {
       final (type, data) = await frames.receive().timeout(_connectTimeout);
-      if (type == wanted) return type;
+      if (type == wanted) return;
       if (type == MsgId.authenticationResponse) {
         // Field 1 = invalid_password. The mobile firmware does not use API passwords.
         if (data.isNotEmpty) throw ApiException('Device requires an API password (unsupported)');
@@ -336,29 +330,25 @@ class EspHomeClient extends ChangeNotifier {
     } catch (e, st) {
       if (!identical(frames, _frames)) return;
       debugPrint('ESPHome read loop failed: $e\n$st');
-      lastError = e is ApiException ? e.message : 'Connection lost (${e.runtimeType}: $e)';
-      _teardown(ConnectionStatus.failed);
-      _scheduleReconnect();
+      _fail(e is ApiException ? e.message : 'Connection lost (${e.runtimeType}: $e)');
     }
   }
 
   void _dispatch(int type, Uint8List data) {
     switch (type) {
       case MsgId.pingRequest:
-        unawaited(_send(Requests.empty(MsgId.pingResponse)).catchError((_) {}));
+        _sendQuiet(Requests.empty(MsgId.pingResponse));
         return;
       case MsgId.pingResponse:
       case MsgId.authenticationResponse:
       case MsgId.helloResponse:
         return;
       case MsgId.getTimeRequest:
-        unawaited(_send(Requests.getTimeResponse(DateTime.now())).catchError((_) {}));
+        _sendQuiet(Requests.getTimeResponse(DateTime.now()));
         return;
       case MsgId.disconnectRequest:
-        unawaited(_send(Requests.empty(MsgId.disconnectResponse)).catchError((_) {}));
-        lastError = 'Device closed the connection';
-        _teardown(ConnectionStatus.failed);
-        _scheduleReconnect();
+        _sendQuiet(Requests.empty(MsgId.disconnectResponse));
+        _fail('Device closed the connection');
         return;
       case MsgId.deviceInfoResponse:
         deviceInfo = DeviceInfo.fromProto(ProtoMessage.decode(data));
@@ -381,14 +371,20 @@ class EspHomeClient extends ChangeNotifier {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(_pingInterval, (_) {
       if (DateTime.now().difference(_lastRx) > _rxTimeout) {
-        lastError = 'Device stopped responding';
-        _teardown(ConnectionStatus.failed);
-        _scheduleReconnect();
+        _fail('Device stopped responding');
         return;
       }
-      unawaited(_send(Requests.empty(MsgId.pingRequest)).catchError((_) {}));
+      _sendQuiet(Requests.empty(MsgId.pingRequest));
     });
   }
+
+  void _fail(String error) {
+    lastError = error;
+    _teardown(ConnectionStatus.failed);
+    _scheduleReconnect();
+  }
+
+  void _sendQuiet((int, Uint8List) msg) => unawaited(_send(msg).catchError((_) {}));
 
   void _scheduleReconnect() {
     if (!_wantConnected) return;

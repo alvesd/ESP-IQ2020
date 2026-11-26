@@ -47,7 +47,7 @@ class WatchRelay {
       if (req['op'] != 'snapshot') {
         await applyWatchCommand(client, snap, req);
         // Give the spa a moment to report the new state before answering.
-        await _waitFor(client, const Duration(milliseconds: 1500), (c) => false);
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
         snap = _snapshot();
       }
       return {'snapshot': snap.toMap()};

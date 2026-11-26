@@ -230,8 +230,8 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
   }
 
   void _nudge(SpaSnapshot snap, int steps) {
-    final base = SpaSnapshot.fromMap({...snap.toMap(), 'target': _pendingTarget ?? snap.target});
-    final next = base.nudged(steps);
+    final base = _pendingTarget ?? snap.target ?? snap.current ?? snap.min;
+    final next = (((base + steps * snap.step) / snap.step).round() * snap.step).clamp(snap.min, snap.max).toDouble();
     setState(() => _pendingTarget = next);
     // Like the phone and the spa remote: one command after the taps stop.
     _debounce?.cancel();
@@ -284,7 +284,7 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
               Text(_client.lastError ?? 'Offline', textAlign: TextAlign.center, maxLines: 3, style: theme.textTheme.bodySmall),
               TextButton(onPressed: () => widget.store.remove(widget.device.id), child: const Text('Change hot tub')),
             ] else ...[
-              const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)),
+              const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 3)),
               const SizedBox(height: 8),
               Text('Connecting to ${snap.name}…', textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
             ],
@@ -361,7 +361,7 @@ class _ToggleChip extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(child: Text(toggle.name, overflow: TextOverflow.ellipsis, style: theme.textTheme.labelLarge)),
             if (busy)
-              const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2))
             else
               Text(toggle.on ? 'On' : 'Off',
                   style: theme.textTheme.labelMedium?.copyWith(color: toggle.on ? accent : theme.colorScheme.outline)),
