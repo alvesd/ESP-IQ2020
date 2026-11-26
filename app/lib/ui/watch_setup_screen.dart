@@ -75,8 +75,10 @@ class _WatchSetupScreenState extends State<WatchSetupScreen> {
         Padding(
           padding: const EdgeInsets.all(20),
           child: Row(children: [
-            if (_sending) const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-            if (_sending) const SizedBox(width: 10),
+            if (_sending) ...[
+              const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 10),
+            ],
             Expanded(child: Text(_message ?? '', style: theme.textTheme.bodySmall)),
           ]),
         ),

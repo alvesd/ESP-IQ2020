@@ -32,6 +32,8 @@ class Iq2020App extends StatelessWidget {
   const Iq2020App({super.key, required this.store});
 
   static ThemeData theme() {
+    WidgetStateProperty<Color?> selectedColor(Color? on, Color off) =>
+        WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? on : off);
     final scheme = ColorScheme.fromSeed(seedColor: SpaColors.aqua, brightness: Brightness.dark).copyWith(
       primary: SpaColors.aqua,
       onPrimary: SpaColors.ink,
@@ -90,12 +92,9 @@ class Iq2020App extends StatelessWidget {
         foregroundColor: SpaColors.ink,
       ),
       switchTheme: SwitchThemeData(
-        trackOutlineColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? Colors.transparent : const Color(0x66FFFFFF)),
-        thumbColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? Colors.white : const Color(0xCCFFFFFF)),
-        trackColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? null : const Color(0x26FFFFFF)),
+        trackOutlineColor: selectedColor(Colors.transparent, const Color(0x66FFFFFF)),
+        thumbColor: selectedColor(Colors.white, const Color(0xCCFFFFFF)),
+        trackColor: selectedColor(null, const Color(0x26FFFFFF)),
       ),
       dividerTheme: const DividerThemeData(color: SpaColors.glassBorder),
       listTileTheme: const ListTileThemeData(iconColor: Color(0xFFB4CCD2)),
@@ -104,12 +103,13 @@ class Iq2020App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = theme();
     return MaterialApp(
       title: 'Hot Tub',
       debugShowCheckedModeBanner: false,
-      theme: theme(),
+      theme: t,
       themeMode: ThemeMode.dark,
-      darkTheme: theme(),
+      darkTheme: t,
       home: SpaBackdrop(child: HomeScreen(store: store)),
     );
   }

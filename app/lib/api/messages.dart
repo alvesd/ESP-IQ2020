@@ -160,6 +160,11 @@ class EntityInfo {
     // does ("Power On Counter" -> "power_on_counter").
     final sentId = m.string(1);
     final objectId = sentId.isNotEmpty ? sentId : objectIdFromName(name);
+    double step(int f) {
+      final v = m.float32(f);
+      return v == 0 ? 1 : v;
+    }
+
     switch (msgType) {
       case MsgId.listBinarySensor:
         return EntityInfo(kind: EntityKind.binarySensor, key: key, objectId: objectId, name: name,
@@ -184,13 +189,13 @@ class EntityInfo {
       case MsgId.listClimate:
         return EntityInfo(kind: EntityKind.climate, key: key, objectId: objectId, name: name,
             climateModes: m.uints(7), minValue: m.float32(8), maxValue: m.float32(9),
-            step: m.float32(10) == 0 ? 1 : m.float32(10), climateSupportsAction: m.boolean(12),
+            step: step(10), climateSupportsAction: m.boolean(12),
             climatePresets: m.uints(16), disabledByDefault: m.boolean(18), icon: m.string(19),
             category: _cat(m.uint(20)));
       case MsgId.listNumber:
         return EntityInfo(kind: EntityKind.number, key: key, objectId: objectId, name: name,
             icon: m.string(5), minValue: m.float32(6), maxValue: m.float32(7),
-            step: m.float32(8) == 0 ? 1 : m.float32(8), disabledByDefault: m.boolean(9),
+            step: step(8), disabledByDefault: m.boolean(9),
             category: _cat(m.uint(10)), unit: m.string(11), deviceClass: m.string(13));
       case MsgId.listSelect:
         return EntityInfo(kind: EntityKind.select, key: key, objectId: objectId, name: name,
@@ -251,8 +256,11 @@ class EntityState {
       case MsgId.binarySensorState:
         return EntityState(key: key, boolValue: m.boolean(2), missing: m.boolean(3));
       case MsgId.sensorState:
+      case MsgId.numberState:
         return EntityState(key: key, number: m.float32(2), missing: m.boolean(3));
       case MsgId.textSensorState:
+      case MsgId.selectState:
+      case MsgId.textState:
         return EntityState(key: key, text: m.string(2), missing: m.boolean(3));
       case MsgId.switchState:
         return EntityState(key: key, boolValue: m.boolean(2), missing: m.boolean(4));
@@ -262,12 +270,6 @@ class EntityState {
         return EntityState(key: key, climateMode: m.uint(2), currentTemperature: m.float32(3),
             targetTemperature: m.float32(4), climateAction: m.uint(8), climatePreset: m.uint(12),
             missing: m.boolean(17));
-      case MsgId.numberState:
-        return EntityState(key: key, number: m.float32(2), missing: m.boolean(3));
-      case MsgId.selectState:
-        return EntityState(key: key, text: m.string(2), missing: m.boolean(3));
-      case MsgId.textState:
-        return EntityState(key: key, text: m.string(2), missing: m.boolean(3));
     }
     return null;
   }

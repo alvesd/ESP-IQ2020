@@ -77,12 +77,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   onTap: () => _open(d),
                   trailing: PopupMenuButton<String>(
                     onSelected: (v) async {
-                      if (v == 'edit') await _add(edit: d);
-                      if (v == 'remove') await widget.store.remove(d.id);
-                      if (v == 'watch' && context.mounted) {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute<void>(builder: (_) => WatchSetupScreen(device: d)),
-                        );
+                      switch (v) {
+                        case 'edit':
+                          await _add(edit: d);
+                        case 'remove':
+                          await widget.store.remove(d.id);
+                        case 'watch':
+                          if (context.mounted) {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(builder: (_) => WatchSetupScreen(device: d)),
+                            );
+                          }
                       }
                     },
                     itemBuilder: (_) => const [

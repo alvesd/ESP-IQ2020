@@ -150,8 +150,18 @@ class _SpaScreenState extends State<SpaScreen> {
         final groups = _EntityGroups(c);
         final tabs = [
           (label: 'Comfort', icon: Icons.hot_tub_outlined, selectedIcon: Icons.hot_tub, page: _comfortPage(c, groups)),
-          (label: 'Power', icon: Icons.bolt_outlined, selectedIcon: Icons.bolt, page: _powerPage(c, groups)),
-          (label: 'Usage', icon: Icons.timer_outlined, selectedIcon: Icons.timer, page: _usagePage(c, groups)),
+          (
+            label: 'Power',
+            icon: Icons.bolt_outlined,
+            selectedIcon: Icons.bolt,
+            page: _sensorPage(c, groups.powerSensors, 'Power', 'No power readings are configured on this spa.'),
+          ),
+          (
+            label: 'Usage',
+            icon: Icons.timer_outlined,
+            selectedIcon: Icons.timer,
+            page: _sensorPage(c, groups.usageSensors, 'Runtime & timers', 'No runtime or timer counters are configured on this spa.'),
+          ),
           if (groups.hasSalt)
             (label: 'Salt', icon: Icons.water_drop_outlined, selectedIcon: Icons.water_drop, page: _saltPage(c, groups)),
           (label: 'Settings', icon: Icons.settings_outlined, selectedIcon: Icons.settings, page: _settingsPage(c, groups)),
@@ -198,13 +208,13 @@ class _SpaScreenState extends State<SpaScreen> {
                         NavigationDestination(icon: _tabIcon(t.label, t.icon), selectedIcon: _tabIcon(t.label, t.selectedIcon), label: t.label),
                     ],
                   ),
-            body: (ownNav && wide)
-                // Keep the rail and content clear of side insets (system bar, camera housing,
-                // rounded corners), which can differ between left and right.
-                ? SafeArea(
-                    top: false,
-                    bottom: false,
-                    child: Row(children: [
+            // Side insets apply in every layout: the Duo's system bar and the native tab bar
+            // both arrive as trailing safe-area insets that content must not go under.
+            body: SafeArea(
+              top: false,
+              bottom: false,
+              child: (ownNav && wide)
+                  ? Row(children: [
                       Expanded(child: body),
                       const VerticalDivider(width: 1),
                       // Rail on the trailing edge, next to the Duo's system bar. Scrolls when the
@@ -233,11 +243,9 @@ class _SpaScreenState extends State<SpaScreen> {
                           ),
                         ),
                       ),
-                    ]),
-                  )
-                // Side insets apply in every layout: the Duo's system bar and the native tab bar
-                // both arrive as trailing safe-area insets that content must not go under.
-                : SafeArea(top: false, bottom: false, child: body),
+                    ])
+                  : body,
+            ),
           );
         });
       },
@@ -273,21 +281,14 @@ class _SpaScreenState extends State<SpaScreen> {
         ],
       ];
 
-  List<Widget> _powerPage(EspHomeClient c, _EntityGroups g) => [
-        if (g.powerSensors.isEmpty)
-          const _EmptyTab('No power readings are configured on this spa.')
-        else ...[
-          const _Section('Power'),
-          _SensorGrid(client: c, sensors: g.powerSensors),
-        ],
-      ];
+  Widget _cardColumn(List<Widget> children) => Card(child: Column(children: children));
 
-  List<Widget> _usagePage(EspHomeClient c, _EntityGroups g) => [
-        if (g.usageSensors.isEmpty)
-          const _EmptyTab('No runtime or timer counters are configured on this spa.')
+  List<Widget> _sensorPage(EspHomeClient c, List<EntityInfo> sensors, String title, String empty) => [
+        if (sensors.isEmpty)
+          _EmptyTab(empty)
         else ...[
-          const _Section('Runtime & timers'),
-          _SensorGrid(client: c, sensors: g.usageSensors),
+          _Section(title),
+          _SensorGrid(client: c, sensors: sensors),
         ],
       ];
 
@@ -298,22 +299,18 @@ class _SpaScreenState extends State<SpaScreen> {
     return [
       if (level != null) _SaltLevelCard(client: c, info: level, status: g.saltStatus),
       if (level == null && g.saltStatus.isNotEmpty)
-        Card(child: Column(children: [for (final e in g.saltStatus) _StatusRow(client: c, info: e)])),
+        _cardColumn([for (final e in g.saltStatus) _StatusRow(client: c, info: e)]),
       if (others.isNotEmpty) ...[
         const _Section('Cartridge & generator'),
         _SensorGrid(client: c, sensors: others),
       ],
       if (g.saltControls.isNotEmpty) ...[
         const _Section('Controls'),
-        Card(
-          child: Column(children: [
-            for (final e in g.saltControls) _GenericRow(client: c, info: e, run: _run),
-          ]),
-        ),
+        _cardColumn([for (final e in g.saltControls) _GenericRow(client: c, info: e, run: _run)]),
       ],
       if (g.saltButtons.isNotEmpty) ...[
         const _Section('Maintenance'),
-        Card(child: Column(children: [for (final e in g.saltButtons) _ButtonRow(client: c, info: e, run: _run)])),
+        _cardColumn([for (final e in g.saltButtons) _ButtonRow(client: c, info: e, run: _run)]),
       ],
     ];
   }
@@ -322,21 +319,17 @@ class _SpaScreenState extends State<SpaScreen> {
         // On/off spa settings live on the Comfort tab; only adjustable values remain here.
         if (g.selects.isNotEmpty || g.numbers.isNotEmpty) ...[
           const _Section('Adjustments'),
-          Card(
-            child: Column(children: [
-              for (final e in g.selects) _SelectRow(client: c, info: e, run: _run),
-              for (final e in g.numbers) _NumberRow(client: c, info: e, run: _run),
-            ]),
-          ),
+          _cardColumn([
+            for (final e in g.selects) _SelectRow(client: c, info: e, run: _run),
+            for (final e in g.numbers) _NumberRow(client: c, info: e, run: _run),
+          ]),
         ],
         if (g.status.isNotEmpty || g.buttons.isNotEmpty) ...[
           const _Section('Status & maintenance'),
-          Card(
-            child: Column(children: [
-              for (final e in g.status) _StatusRow(client: c, info: e),
-              for (final e in g.buttons) _ButtonRow(client: c, info: e, run: _run),
-            ]),
-          ),
+          _cardColumn([
+            for (final e in g.status) _StatusRow(client: c, info: e),
+            for (final e in g.buttons) _ButtonRow(client: c, info: e, run: _run),
+          ]),
         ],
         if (g.config.isNotEmpty || c.deviceInfo != null)
           Card(
@@ -399,10 +392,18 @@ class _EntityGroups {
     buttons = kind(EntityKind.button);
     config = [for (final k in EntityKind.values) ...kind(k, main: false)];
 
-    final sensors = kind(EntityKind.sensor);
-    powerSensors = sensors.where(isPowerSensor).toList();
-    usageSensors = sensors.where((e) => !isPowerSensor(e) && isUsageSensor(e)).toList();
-    comfortSensors = sensors.where((e) => !isPowerSensor(e) && !isUsageSensor(e)).toList();
+    powerSensors = [];
+    usageSensors = [];
+    comfortSensors = [];
+    for (final e in kind(EntityKind.sensor)) {
+      if (isPowerSensor(e)) {
+        powerSensors.add(e);
+      } else if (isUsageSensor(e)) {
+        usageSensors.add(e);
+      } else {
+        comfortSensors.add(e);
+      }
+    }
   }
 }
 
@@ -437,6 +438,48 @@ const _saltZones = <(double, double, String, Color)>[
   return (_saltZones.last.$3, _saltZones.last.$4);
 }
 
+const _gaugeStart = 3 * pi / 4; // 7:30 position
+const _gaugeSweep = 3 * pi / 2; // to 4:30
+const _gaugeStroke = 14.0;
+
+void _drawGaugeKnob(Canvas canvas, Offset center, double radius, double angle, Color ringColor,
+    {bool enabled = true}) {
+  final p = center + Offset(cos(angle), sin(angle)) * radius;
+  canvas.drawCircle(p, _gaugeStroke * 0.95, Paint()..color = Colors.black.withValues(alpha: 0.18));
+  canvas.drawCircle(p, _gaugeStroke * 0.85, Paint()..color = enabled ? Colors.white : Colors.white54);
+  canvas.drawCircle(
+      p,
+      _gaugeStroke * 0.55,
+      Paint()
+        ..color = ringColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
+}
+
+class _GaugeBody extends StatelessWidget {
+  final CustomPainter painter;
+  final Widget center;
+  final String minLabel, maxLabel;
+  final TextStyle? labelStyle;
+  const _GaugeBody({
+    required this.painter,
+    required this.center,
+    required this.minLabel,
+    required this.maxLabel,
+    required this.labelStyle,
+  });
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        painter: painter,
+        child: Stack(children: [
+          Center(child: center),
+          Align(alignment: const Alignment(-0.62, 0.95), child: Text(minLabel, style: labelStyle)),
+          Align(alignment: const Alignment(0.62, 0.95), child: Text(maxLabel, style: labelStyle)),
+        ]),
+      );
+}
+
 /// Headline salt reading as a zoned radial gauge, with any salt status flags
 /// (e.g. "Salt Level Confirmed") underneath. Read-only: salt is raised by adding salt.
 class _SaltLevelCard extends StatelessWidget {
@@ -464,29 +507,26 @@ class _SaltLevelCard extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 280),
             child: AspectRatio(
               aspectRatio: 1.15,
-              child: CustomPaint(
+              child: _GaugeBody(
                 painter: _SaltGaugePainter(value: value, track: theme.colorScheme.onSurface),
-                child: Stack(children: [
-                  Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(_fmt(value, 0),
-                            style: theme.textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w300, fontSize: 60)),
-                      ),
-                      if (zone != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                              color: zone.$2.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
-                          child: Text(zone.$1,
-                              style: theme.textTheme.labelLarge?.copyWith(color: zone.$2, fontWeight: FontWeight.w600)),
-                        ),
-                    ]),
+                center: Column(mainAxisSize: MainAxisSize.min, children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(_fmt(value, 0),
+                        style: theme.textTheme.displayLarge?.copyWith(fontWeight: FontWeight.w300, fontSize: 60)),
                   ),
-                  Align(alignment: const Alignment(-0.62, 0.95), child: Text('0', style: muted)),
-                  Align(alignment: const Alignment(0.62, 0.95), child: Text(_fmt(saltScaleMax, 0), style: muted)),
+                  if (zone != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                          color: zone.$2.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+                      child: Text(zone.$1,
+                          style: theme.textTheme.labelLarge?.copyWith(color: zone.$2, fontWeight: FontWeight.w600)),
+                    ),
                 ]),
+                minLabel: '0',
+                maxLabel: _fmt(saltScaleMax, 0),
+                labelStyle: muted,
               ),
             ),
           ),
@@ -504,19 +544,17 @@ class _SaltGaugePainter extends CustomPainter {
   final Color track;
   _SaltGaugePainter({required this.value, required this.track});
 
-  static const double _start = 3 * pi / 4, _sweep = 3 * pi / 2;
-
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 14.0, gap = 0.025; // radians between zones
-    final radius = (size.shortestSide / 2) - stroke;
+    const gap = 0.025; // radians between zones
+    final radius = (size.shortestSide / 2) - _gaugeStroke;
     final c = size.center(Offset.zero);
     final rect = Rect.fromCircle(center: c, radius: radius);
-    double angle(double v) => _start + _sweep * (v / saltScaleMax).clamp(0.0, 1.0);
+    double angle(double v) => _gaugeStart + _gaugeSweep * (v / saltScaleMax).clamp(0.0, 1.0);
     Paint arc(Color color) => Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke;
+      ..strokeWidth = _gaugeStroke;
 
     for (final z in _saltZones) {
       final a0 = angle(z.$1) + (z.$1 > 0 ? gap / 2 : 0);
@@ -536,23 +574,11 @@ class _SaltGaugePainter extends CustomPainter {
     for (final z in _saltZones.skip(1)) {
       final a = angle(z.$1);
       final dir = Offset(cos(a), sin(a));
-      canvas.drawLine(c + dir * (radius - stroke - 4), c + dir * (radius - stroke - 10), tick);
+      canvas.drawLine(c + dir * (radius - _gaugeStroke - 4), c + dir * (radius - _gaugeStroke - 10), tick);
     }
 
     final zone = saltZone(value);
-    if (zone != null) {
-      final a = angle(value);
-      final p = c + Offset(cos(a), sin(a)) * radius;
-      canvas.drawCircle(p, stroke * 0.95, Paint()..color = Colors.black.withValues(alpha: 0.18));
-      canvas.drawCircle(p, stroke * 0.85, Paint()..color = Colors.white);
-      canvas.drawCircle(
-          p,
-          stroke * 0.55,
-          Paint()
-            ..color = zone.$2
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3);
-    }
+    if (zone != null) _drawGaugeKnob(canvas, c, radius, angle(value), zone.$2);
   }
 
   @override
@@ -574,16 +600,18 @@ typedef _Runner = void Function(Future<void> Function() action);
 String _fmt(double v, int decimals) => v.isNaN ? '—' : v.toStringAsFixed(decimals.clamp(0, 3));
 
 const _durationSeconds = {'s': 1, 'min': 60, 'h': 3600, 'd': 86400};
+final _thousandsRe = RegExp(r'\B(?=(\d{3})+(?!\d))');
 
 /// Runtime counters arrive in seconds (or minutes/hours); show them as "1,848d 8h" style text.
 String formatDuration(double value, String unit) {
+  if (value.isNaN) return '—';
   final perUnit = _durationSeconds[unit];
-  if (value.isNaN || perUnit == null) return value.isNaN ? '—' : '${value.toStringAsFixed(0)} $unit';
+  if (perUnit == null) return '${value.toStringAsFixed(0)} $unit';
   final total = (value * perUnit).round();
   final days = total ~/ 86400;
   final hours = (total % 86400) ~/ 3600;
   final minutes = (total % 3600) ~/ 60;
-  String grouped(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  String grouped(int n) => n.toString().replaceAllMapped(_thousandsRe, (_) => ',');
   if (days > 0) return '${grouped(days)}d ${hours}h';
   if (hours > 0) return '${hours}h ${minutes}m';
   return '${minutes}m';
@@ -801,33 +829,36 @@ class _ClimateCardState extends State<_ClimateCard> {
   // display). Show °F when the spa's own temperature sensors are configured in °F.
   bool get _fahrenheit => widget.client.entities.values
       .any((e) => e.kind == EntityKind.sensor && e.unit == '°F');
-  double _toDisplay(double c) => _fahrenheit ? c * 9 / 5 + 32 : c;
-  double _toCelsius(double d) => _fahrenheit ? (d - 32) * 5 / 9 : d;
+  double _toDisplay(double c, bool f) => f ? c * 9 / 5 + 32 : c;
+  double _toCelsius(double d, bool f) => f ? (d - 32) * 5 / 9 : d;
 
   /// Target range in display units, from the climate entity's visual min/max.
-  (double, double) get _range {
+  (double, double) _rangeFor(bool f) {
     final info = widget.info;
-    final lo = _toDisplay(info.minValue);
-    final hi = info.maxValue <= info.minValue ? _toDisplay(40) : _toDisplay(info.maxValue);
+    final lo = _toDisplay(info.minValue, f);
+    final hi = info.maxValue <= info.minValue ? _toDisplay(40, f) : _toDisplay(info.maxValue, f);
     return (lo, hi);
   }
 
-  double get _step => _fahrenheit ? 1.0 : widget.info.step;
+  double _stepFor(bool f) => f ? 1.0 : widget.info.step;
 
   /// [current] and the pending target are in display units.
-  void _nudge(double current, int direction) => _setTarget((_pendingTarget ?? current) + direction * _step);
+  void _nudge(double current, int direction, bool f) =>
+      _setTarget((_pendingTarget ?? current) + direction * _stepFor(f), f);
 
   /// Snaps [value] (display units) to the step and range, shows it, and sends it after a pause.
-  void _setTarget(double value) {
+  void _setTarget(double value, [bool? fahrenheit]) {
     final info = widget.info;
-    final (lo, hi) = _range;
-    final next = ((value / _step).round() * _step).clamp(lo, hi).toDouble();
+    final f = fahrenheit ?? _fahrenheit;
+    final step = _stepFor(f);
+    final (lo, hi) = _rangeFor(f);
+    final next = ((value / step).round() * step).clamp(lo, hi).toDouble();
     if (next == _pendingTarget) return;
     setState(() => _pendingTarget = next);
     // The spa remote also debounces; send one command after the user stops tapping.
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 700), () {
-      widget.run(() => widget.client.setClimate(info.key, target: _toCelsius(next)));
+      widget.run(() => widget.client.setClimate(info.key, target: _toCelsius(next, f)));
       Timer(const Duration(seconds: 3), () {
         if (mounted) setState(() => _pendingTarget = null);
       });
@@ -839,10 +870,12 @@ class _ClimateCardState extends State<_ClimateCard> {
     final info = widget.info;
     final s = widget.client.states[info.key];
     final theme = Theme.of(context);
-    final current = _toDisplay(s?.currentTemperature ?? double.nan);
-    final target = _pendingTarget ?? _toDisplay(s?.targetTemperature ?? double.nan);
-    final decimals = (!_fahrenheit && info.step < 1) ? 1 : 0;
-    final unit = _fahrenheit ? '°F' : '°C';
+    final f = _fahrenheit;
+    final (lo, hi) = _rangeFor(f);
+    final current = _toDisplay(s?.currentTemperature ?? double.nan, f);
+    final target = _pendingTarget ?? _toDisplay(s?.targetTemperature ?? double.nan, f);
+    final decimals = (!f && info.step < 1) ? 1 : 0;
+    final unit = f ? '°F' : '°C';
     final action = switch (s?.climateAction) {
       ClimateAction.heating => ('Heating', Icons.local_fire_department, const [Color(0xFFFF8A4C), Color(0xFFE5484D)]),
       ClimateAction.cooling => ('Cooling', Icons.ac_unit, const [Color(0xFF4FC3F7), Color(0xFF3D6BFD)]),
@@ -856,7 +889,7 @@ class _ClimateCardState extends State<_ClimateCard> {
     // Card colour follows the water temperature (blue when cool, red-orange near the top of the
     // range), deepened toward the night palette so white text stays readable.
     const deep = Color(0xFF062530);
-    final heat = tempColor((current - _range.$1) / (_range.$2 - _range.$1));
+    final heat = tempColor((current - lo) / (hi - lo));
     final cardColors = current.isNaN
         ? action.$3
         : [Color.lerp(heat, deep, 0.15)!, Color.lerp(heat, deep, 0.55)!];
@@ -912,8 +945,8 @@ class _ClimateCardState extends State<_ClimateCard> {
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 300),
             child: _TempDial(
-              min: _range.$1,
-              max: _range.$2,
+              min: lo,
+              max: hi,
               current: current,
               target: target,
               enabled: enabled,
@@ -926,8 +959,8 @@ class _ClimateCardState extends State<_ClimateCard> {
                 ),
                 Text('Water', style: theme.textTheme.bodyMedium?.copyWith(color: white.withValues(alpha: 0.8))),
               ]),
-              minLabel: '${_fmt(_range.$1, decimals)}°',
-              maxLabel: '${_fmt(_range.$2, decimals)}°',
+              minLabel: '${_fmt(lo, decimals)}°',
+              maxLabel: '${_fmt(hi, decimals)}°',
             ),
           ),
           const SizedBox(height: 8),
@@ -936,7 +969,7 @@ class _ClimateCardState extends State<_ClimateCard> {
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
             child: Row(children: [
-              roundButton(Icons.remove, enabled ? () => _nudge(target, -1) : null),
+              roundButton(Icons.remove, enabled ? () => _nudge(target, -1, f) : null),
               Expanded(
                 child: Column(children: [
                   FittedBox(
@@ -948,7 +981,7 @@ class _ClimateCardState extends State<_ClimateCard> {
                       style: theme.textTheme.bodySmall?.copyWith(color: white.withValues(alpha: 0.8))),
                 ]),
               ),
-              roundButton(Icons.add, enabled ? () => _nudge(target, 1) : null),
+              roundButton(Icons.add, enabled ? () => _nudge(target, 1, f) : null),
             ]),
           ),
           if (modes.length > 1) ...[
@@ -1024,16 +1057,13 @@ class _TempDial extends StatelessWidget {
     required this.maxLabel,
   });
 
-  static const double _start = 3 * pi / 4; // 7:30 position
-  static const double _sweep = 3 * pi / 2; // to 4:30
-
   double _valueAt(Offset local, Size size) {
     final c = size.center(Offset.zero);
-    var a = atan2(local.dy - c.dy, local.dx - c.dx) - _start;
+    var a = atan2(local.dy - c.dy, local.dx - c.dx) - _gaugeStart;
     a = (a % (2 * pi) + 2 * pi) % (2 * pi);
     // In the 90° gap at the bottom, snap to whichever end is closer.
-    if (a > _sweep) a = (a - _sweep) < (2 * pi - a) ? _sweep : 0;
-    return min + (a / _sweep) * (max - min);
+    if (a > _gaugeSweep) a = (a - _gaugeSweep) < (2 * pi - a) ? _gaugeSweep : 0;
+    return min + (a / _gaugeSweep) * (max - min);
   }
 
   @override
@@ -1051,27 +1081,12 @@ class _TempDial extends StatelessWidget {
           onPanStart: (d) => drag(d.localPosition),
           onPanUpdate: (d) => drag(d.localPosition),
           onTapUp: (d) => drag(d.localPosition),
-          child: CustomPaint(
-            painter: _TempDialPainter(
-              min: min,
-              max: max,
-              current: current,
-              target: target,
-              enabled: enabled,
-              start: _start,
-              sweep: _sweep,
-            ),
-            child: Stack(children: [
-              Center(child: Padding(padding: const EdgeInsets.all(48), child: center)),
-              Align(
-                alignment: const Alignment(-0.62, 0.95),
-                child: Text(minLabel, style: labelStyle),
-              ),
-              Align(
-                alignment: const Alignment(0.62, 0.95),
-                child: Text(maxLabel, style: labelStyle),
-              ),
-            ]),
+          child: _GaugeBody(
+            painter: _TempDialPainter(min: min, max: max, current: current, target: target, enabled: enabled),
+            center: Padding(padding: const EdgeInsets.all(48), child: center),
+            minLabel: minLabel,
+            maxLabel: maxLabel,
+            labelStyle: labelStyle,
           ),
         );
       }),
@@ -1080,7 +1095,7 @@ class _TempDial extends StatelessWidget {
 }
 
 class _TempDialPainter extends CustomPainter {
-  final double min, max, current, target, start, sweep;
+  final double min, max, current, target;
   final bool enabled;
   _TempDialPainter({
     required this.min,
@@ -1088,34 +1103,31 @@ class _TempDialPainter extends CustomPainter {
     required this.current,
     required this.target,
     required this.enabled,
-    required this.start,
-    required this.sweep,
   });
 
   double _frac(double v) => v.isNaN ? double.nan : ((v - min) / (max - min)).clamp(0.0, 1.0);
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 14.0;
-    final radius = (size.shortestSide / 2) - stroke;
+    final radius = (size.shortestSide / 2) - _gaugeStroke;
     final c = size.center(Offset.zero);
     final rect = Rect.fromCircle(center: c, radius: radius);
     Paint arc(Color color) => Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
+      ..strokeWidth = _gaugeStroke
       ..strokeCap = StrokeCap.round;
 
     // Track and tick marks every 10% of the range.
-    canvas.drawArc(rect, start, sweep, false, arc(Colors.white.withValues(alpha: 0.22)));
+    canvas.drawArc(rect, _gaugeStart, _gaugeSweep, false, arc(Colors.white.withValues(alpha: 0.22)));
     final tick = Paint()
       ..color = Colors.white.withValues(alpha: 0.35)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
     for (var i = 0; i <= 10; i++) {
-      final a = start + sweep * i / 10;
+      final a = _gaugeStart + _gaugeSweep * i / 10;
       final dir = Offset(cos(a), sin(a));
-      canvas.drawLine(c + dir * (radius - stroke - 4), c + dir * (radius - stroke - (i % 5 == 0 ? 12 : 8)), tick);
+      canvas.drawLine(c + dir * (radius - _gaugeStroke - 4), c + dir * (radius - _gaugeStroke - (i % 5 == 0 ? 12 : 8)), tick);
     }
 
     // Current water temperature: the arc runs blue -> red across the whole range, so its tip
@@ -1124,39 +1136,28 @@ class _TempDialPainter extends CustomPainter {
     if (!cf.isNaN && cf > 0) {
       // Hold the hot end through half the bottom gap, then switch hard to blue, so the round
       // cap that pokes just before the start of the arc is blue rather than wrapped-around red.
-      final sf = sweep / (2 * pi);
-      final gapMid = sf + (1 - sf) / 2;
+      const sf = _gaugeSweep / (2 * pi);
+      const gapMid = sf + (1 - sf) / 2;
       final shader = SweepGradient(
         colors: [..._tempColors, _tempColors.last, _tempColors.first, _tempColors.first],
         stops: [..._tempStops.map((s) => s * sf), gapMid, gapMid, 1.0],
-        transform: GradientRotation(start),
+        transform: const GradientRotation(_gaugeStart),
       ).createShader(rect);
       canvas.drawArc(
           rect,
-          start,
-          sweep * cf,
+          _gaugeStart,
+          _gaugeSweep * cf,
           false,
           arc(Colors.white)
             ..shader = shader
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
-      canvas.drawArc(rect, start, sweep * cf, false, arc(Colors.white)..shader = shader);
+      canvas.drawArc(rect, _gaugeStart, _gaugeSweep * cf, false, arc(Colors.white)..shader = shader);
     }
 
     // Target knob.
     final tf = _frac(target);
     if (!tf.isNaN) {
-      final a = start + sweep * tf;
-      final p = c + Offset(cos(a), sin(a)) * radius;
-      canvas.drawCircle(p, stroke * 0.95, Paint()..color = Colors.black.withValues(alpha: 0.18));
-      canvas.drawCircle(p, stroke * 0.85, Paint()..color = enabled ? Colors.white : Colors.white54);
-      // Ring in the target temperature's colour.
-      canvas.drawCircle(
-          p,
-          stroke * 0.55,
-          Paint()
-            ..color = tempColor(tf)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3);
+      _drawGaugeKnob(canvas, c, radius, _gaugeStart + _gaugeSweep * tf, tempColor(tf), enabled: enabled);
     }
   }
 
