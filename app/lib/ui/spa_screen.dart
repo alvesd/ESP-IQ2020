@@ -11,6 +11,7 @@ import '../api/messages.dart';
 import '../device_store.dart';
 import 'add_device_sheet.dart';
 import 'heating_eta.dart';
+import 'history_dashboard.dart';
 import 'history_series.dart';
 import 'logo_light_badge.dart';
 import 'native_tabs.dart';
@@ -30,6 +31,8 @@ class _SpaScreenState extends State<SpaScreen> {
   late EspHomeClient _client;
   late final AppLifecycleListener _lifecycle;
   Timer? _pauseTimer;
+  int _settingsSubTab = 0; // 0 = General, 1 = History
+  HistoryTimeframe _historyTimeframe = HistoryTimeframe.days31;
 
   EspHomeClient _createClient(SavedDevice d) {
     final remote = d.effectiveRemote;
@@ -535,7 +538,39 @@ class _SpaScreenState extends State<SpaScreen> {
     final heatEnabled = g.heatUpTempNumber == null || connected;
     final vacEnabled = g.vacationTempNumber == null || connected;
 
+    final subTabBar = _SettingsSubTabBar(
+      selected: _settingsSubTab,
+      onSelect: (idx) => setState(() => _settingsSubTab = idx),
+    );
+
+    if (_settingsSubTab == 1) {
+      return [
+        subTabBar,
+        const SizedBox(height: 12),
+        SettingsHistoryView(
+          timeframe: _historyTimeframe,
+          onTimeframeChanged: (tf) => setState(() => _historyTimeframe = tf),
+          tempUnit: unit,
+          waterRecent: _histSeries(c, g.historyWaterTemp),
+          waterDaily: _histSeries(c, g.historyWaterTempDaily),
+          waterMonthly: _histSeries(c, g.historyWaterTempMonthly),
+          powerRecent: _histSeries(c, g.historyPower),
+          powerDaily: _histSeries(c, g.historyPowerDaily),
+          powerMonthly: _histSeries(c, g.historyPowerMonthly),
+          energyDaily: _histSeries(c, g.historyEnergy),
+          energyMonthly: _histSeries(c, g.historyEnergyMonthly),
+          heaterDaily: _histSeries(c, g.historyHeaterDaily),
+          heaterMonthly: _histSeries(c, g.historyHeaterMonthly),
+          saltRecent: _histSeries(c, g.historySalt),
+          saltDaily: _histSeries(c, g.historySaltDaily),
+          saltMonthly: _histSeries(c, g.historySaltMonthly),
+          freeHeapRecent: _histSeries(c, g.historyFreeHeap),
+        ),
+      ];
+    }
+
     return [
+      subTabBar,
       const _Section('Temperature presets'),
       _cardColumn([
         _PresetTempRow(
@@ -617,6 +652,66 @@ class _SpaScreenState extends State<SpaScreen> {
           ),
         ),
     ];
+  }
+}
+
+class _SettingsSubTabBar extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onSelect;
+
+  const _SettingsSubTabBar({required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const accent = Color(0xFF4FE3EA);
+    Widget tabBtn(int idx, IconData icon, String label) {
+      final act = selected == idx;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: () => onSelect(idx),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: act ? accent.withValues(alpha: 0.22) : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+              border: act ? Border.all(color: accent.withValues(alpha: 0.65)) : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 15, color: act ? accent : theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: act ? accent : theme.colorScheme.onSurfaceVariant,
+                    fontWeight: act ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      child: Row(
+        children: [
+          tabBtn(0, Icons.tune, 'General'),
+          const SizedBox(width: 4),
+          tabBtn(1, Icons.show_chart, 'History'),
+        ],
+      ),
+    );
   }
 }
 

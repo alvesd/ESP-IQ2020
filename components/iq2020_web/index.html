@@ -108,6 +108,7 @@ button,select,input{font:inherit;color:inherit}
 .btn-pri{padding:8px 16px;border-radius:999px;border:none;background:var(--aqua);color:#061a24;font-weight:700;cursor:pointer}
 .mc{padding:12px 14px 10px;margin-top:10px}
 .mc-hd{display:flex;align-items:center;gap:8px}
+.mc-sub{font-size:11px;color:var(--muted);margin-top:1px}
 .mc-badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}
 .mc-val{font-size:14px;font-weight:700}
 .mc-tabs{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
@@ -116,6 +117,18 @@ button,select,input{font:inherit;color:inherit}
 .mc-svg{width:100%;height:54px;display:block;margin-top:8px}
 .mc-ax{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
 .mc-ft{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
+.seg{display:flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--border);margin-bottom:14px}
+.seg button{flex:1;border:1px solid transparent;background:transparent;color:var(--muted);padding:8px 10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.seg button.act{background:rgba(79,227,235,.18);border-color:rgba(79,227,235,.55);color:var(--aqua);font-weight:700}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.kpi{padding:10px 12px}
+.kpi-l{font-size:11px;color:var(--muted)}
+.kpi-v{font-size:18px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi-s{font-size:11px;color:var(--muted);margin-top:2px}
+.hist-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:10px}
+.hist-grid .mc{margin-top:0}
+.mc-tt{position:fixed;z-index:60;display:none;pointer-events:none;background:#102634;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:11.5px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+@media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.hist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(min-width:640px){body{padding-bottom:24px}.bbar{display:none}.nav-top{display:flex}.grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
 </head>
@@ -130,6 +143,7 @@ button,select,input{font:inherit;color:inherit}
 </header>
 <main id="app" class="wrap"></main>
 <nav id="navBot" class="bbar"></nav>
+<div id="mcTip" class="mc-tt"><div id="mcTipLbl" style="font-weight:700"></div><div id="mcTipVal" style="color:var(--muted)"></div></div>
 <div id="modalBg" class="modal-bg">
   <div class="modal">
     <h3 id="modalTitle">Confirm?</h3>
@@ -649,6 +663,8 @@ function renderGenericRow(e) {
 }
 
 const chartRanges = {};
+let settingsSubTab = "general", historyTf = "31d";
+const _tipData = {};
 const _MC_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 function _buildParsedSeries(prefix, hours, isMonthly, isDaily, endDate, values, spanOverride=null) {
@@ -727,28 +743,38 @@ function historyAxisLabel(h, idx) {
   return hrs >= 24 ? `-${Math.round(hrs / 24)}d` : `-${hrs}h`;
 }
 
-function _renderMicrochartBody(h, gid, { title, icon, accent, unit="", decimals=0, bars=false, showTotal=false, tabsHtml="" }) {
+function _renderMicrochartBody(h, gid, { title, subtitle="", icon, accent, unit="", decimals=0, bars=false, showTotal=false, spanOverride=null, saltBand=false, splitAt=null, tabsHtml="" }) {
   const fmtV = v => v === null || v === undefined ? "—" : `${decimals === 0 ? Math.round(v) : v.toFixed(decimals)}${unit ? " " + unit : ""}`;
   let body = `<div style="height:54px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Collecting history…</div>`;
   if (h) {
     const W = 300, H = 54, pad = 4, dH = H - pad * 2;
     let lo = h.min, hi = h.max;
     if (bars && lo > 0) lo = 0;
+    if (saltBand) { lo = Math.min(lo, 20); hi = Math.max(hi, 85); }
     let rng = hi - lo;
     if (rng < 1e-6) { rng = 1; if (!bars) lo -= 0.5; }
+    const yAt = v => pad + (1 - Math.max(0, Math.min(1, (v - lo) / rng))) * dH;
     let shapes = `<line x1="0" y1="${H-pad}" x2="${W}" y2="${H-pad}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
+    if (saltBand) {
+      const yT = yAt(Math.min(hi, 80)), yB = yAt(Math.max(lo, 40));
+      if (yB > yT) shapes += `<rect x="0" y="${yT.toFixed(1)}" width="${W}" height="${(yB-yT).toFixed(1)}" fill="#22c55e" fill-opacity="0.12"/>`;
+    }
+    const n = h.values.length;
+    if (splitAt && n > splitAt) {
+      const sx = bars ? (splitAt / n) * W : (splitAt / (n - 1)) * W;
+      shapes += `<line x1="${sx.toFixed(1)}" y1="${pad}" x2="${sx.toFixed(1)}" y2="${H-pad}" stroke="rgba(255,255,255,.26)" stroke-dasharray="3 3" stroke-width="1"/>`;
+    }
+    _tipData[gid] = { h, fmtV };
     if (bars) {
-      const n = h.values.length, sw = W / Math.max(1, n), bw = Math.max(2, sw * 0.64);
+      const sw = W / Math.max(1, n), bw = Math.max(2, sw * 0.64);
       h.values.forEach((v, i) => {
         if (v === null) return;
         const frac = Math.max(0.05, Math.min(1, (v - lo) / rng)), bh = frac * dH;
         const x = i * sw + (sw - bw) / 2, y = pad + (dH - bh);
-        shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${accent}" fill-opacity="${i===n-1?1:0.55}"/>`;
+        shapes += `<rect class="mc-pt" data-tip="${esc(gid)}:${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${accent}" fill-opacity="${i===n-1?1:0.55}"/>`;
       });
     } else {
-      const n = h.values.length;
       const xAt = i => n <= 1 ? W / 2 : (i / (n - 1)) * W;
-      const yAt = v => pad + (1 - Math.max(0, Math.min(1, (v - lo) / rng))) * dH;
       let defs = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${accent}" stop-opacity="0.30"/><stop offset="100%" stop-color="${accent}" stop-opacity="0"/></linearGradient></defs>`;
       let seg = [], lastPt = null;
       const flush = () => {
@@ -769,6 +795,12 @@ function _renderMicrochartBody(h, gid, { title, icon, accent, unit="", decimals=
       });
       flush();
       if (lastPt) shapes += `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3.8" fill="#fff"/><circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="2.3" fill="${accent}"/>`;
+      const cw = W / Math.max(1, n);
+      h.values.forEach((v, i) => {
+        if (v === null) return;
+        const hx = Math.max(0, xAt(i) - cw / 2);
+        shapes += `<rect class="mc-pt" data-tip="${esc(gid)}:${i}" x="${hx.toFixed(1)}" y="0" width="${cw.toFixed(1)}" height="${H}" fill="transparent"/>`;
+      });
       shapes = defs + shapes;
     }
     const axHtml = h.values.length >= 2 ? `<div class="mc-ax"><span>${esc(historyAxisLabel(h, 0))}</span>${h.values.length >= 5 ? `<span>${esc(historyAxisLabel(h, Math.floor(h.values.length / 2)))}</span>` : ""}<span>${esc(historyAxisLabel(h, h.values.length - 1))}</span></div>` : "";
@@ -777,11 +809,15 @@ function _renderMicrochartBody(h, gid, { title, icon, accent, unit="", decimals=
       <div class="mc-ft"><span>${leftStat}</span><span>${h.values.length} × ${esc(h.prefix)}</span><span>Max ${esc(fmtV(h.max))}</span></div>`;
   }
   const heroVal = h ? fmtV(showTotal ? h.sum : h.latest) : "—";
+  const badge = spanOverride || (h ? h.span : "");
   return `<div class="card mc">
     <div class="mc-hd">
       <span class="ico-badge" style="background:${accent}24;color:${accent};width:28px;height:28px">${iconSvg(icon,14)}</span>
-      <span style="font-size:13.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
-      ${h?`<span class="mc-badge" style="background:${accent}24;color:${accent}">${esc(h.span)}</span>`:""}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</div>
+        ${subtitle ? `<div class="mc-sub">${esc(subtitle)}</div>` : ""}
+      </div>
+      ${badge?`<span class="mc-badge" style="background:${accent}24;color:${accent}">${esc(badge)}</span>`:""}
       <span class="mc-val">${esc(heroVal)}</span>
     </div>${tabsHtml}${body}
   </div>`;
@@ -829,6 +865,72 @@ function totalTabsFor(daily, monthly) {
   ];
 }
 
+function renderSettingsHistory(g, isF) {
+  const tfOpts = [
+    ["mtd", "Daily · MTD", "Current calendar month (1d buckets)", "MTD"],
+    ["31d", "Daily · 31d", "Rolling 31 days (1d buckets)", "31d"],
+    ["1yr", "Monthly · 1yr", "Trailing 12 months (1mo rollups)", "1yr"],
+    ["2yr", "Annual · 2yr", "24-month annual trend (1mo rollups)", "2yr"],
+    ["14d", "Recent · 14d (6h)", "Last 14 days (6h buckets; Energy/Heater in 1d)", "14d · 6h"],
+  ];
+  const activeMeta = tfOpts.find(t => t[0] === historyTf) || tfOpts[1];
+  const parseE = e => e ? parseHistory(e.state) : null;
+  const pickAvg = (r, d, m) => {
+    const ds = parseE(d), ms = parseE(m);
+    if (historyTf === "mtd") return sliceThisMonth(ds) || ds;
+    if (historyTf === "31d") return ds;
+    if (historyTf === "1yr") return sliceLastN(ms, 12);
+    if (historyTf === "2yr") return ms;
+    return parseE(r);
+  };
+  const pickTot = (d, m) => {
+    const ds = parseE(d), ms = parseE(m);
+    if (historyTf === "mtd") return sliceThisMonth(ds) || ds;
+    if (historyTf === "31d") return ds;
+    if (historyTf === "1yr") return sliceLastN(ms, 12);
+    if (historyTf === "2yr") return ms;
+    return sliceLastN(ds, 14);
+  };
+
+  const eH = pickTot(g.histEnergy, g.histEnergyM);
+  const hH = pickTot(g.histHeatD, g.histHeatM);
+  const wH = pickAvg(g.histWater, g.histWaterD, g.histWaterM);
+  const pH = pickAvg(g.histPower, g.histPowerD, g.histPowerM);
+  const sH = pickAvg(g.histSalt, g.histSaltD, g.histSaltM);
+  const heapH = parseE(g.histHeap);
+
+  const avgSpan = activeMeta[3], totSpan = historyTf === "14d" ? "14d (1d)" : avgSpan;
+  const split = historyTf === "2yr" ? 12 : null;
+  const perU = (historyTf === "1yr" || historyTf === "2yr") ? "mo" : "day";
+  const fmtN = (v, dec, u="") => (v === null || v === undefined) ? "—" : `${dec === 0 ? Math.round(v) : v.toFixed(dec)}${u ? " " + u : ""}`;
+  const tUnit = isF ? "°F" : "°C";
+  const sZone = (sH && sH.latest !== null) ? saltZone(sH.latest) : null;
+
+  const pills = `<div class="mc-tabs" style="margin-top:0">${tfOpts.map(([k, lbl]) => {
+    const act = k === historyTf;
+    const st = act ? ` style="background:rgba(79,227,235,.22);border-color:rgba(79,227,235,.7);color:var(--aqua)"` : "";
+    return `<button type="button" class="mc-tab${act?" act":""}" data-htf="${k}"${st}>${lbl}</button>`;
+  }).join("")}</div><div style="font-size:11px;color:var(--muted);margin-top:6px">${esc(activeMeta[2])}</div>`;
+
+  const kpis = `<div class="kpi-grid">
+    <div class="card kpi"><div class="kpi-l">Total Energy</div><div class="kpi-v">${esc(fmtN(eH?.sum, 1, "kWh"))}</div><div class="kpi-s">${eH ? `Avg ${esc(fmtN(eH.avg, 1, "kWh"))}/${perU}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Heater Runtime</div><div class="kpi-v">${esc(fmtN(hH?.sum, 1, "h"))}</div><div class="kpi-s">${hH ? `Avg ${esc(fmtN(hH.avg, 1, "h"))}/${perU}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Water Temp</div><div class="kpi-v">${esc(fmtN(wH?.avg, 1, tUnit))}</div><div class="kpi-s">${wH ? `${wH.min.toFixed(1)}–${wH.max.toFixed(1)}${tUnit}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Salt Level</div><div class="kpi-v">${sH ? Math.round(sH.latest) : "—"}</div><div class="kpi-s" style="color:${sZone?sZone.color:"var(--muted)"}">${sZone ? esc(sZone.label) : "Collecting…"}</div></div>
+  </div>`;
+
+  const cards = `<div class="hist-grid">
+    ${_renderMicrochartBody(eH, "sh_energy", { title: "Energy Consumption", subtitle: "Pumps + Controller + Heater", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: (eH && eH.isMonthly) ? 1 : 2, bars: true, showTotal: true, spanOverride: totSpan, splitAt: split })}
+    ${_renderMicrochartBody(hH, "sh_heater", { title: "Heater Runtime", subtitle: "Active heating hours", icon: "flame", accent: "#FF8A4C", unit: "h", decimals: 1, bars: true, showTotal: true, spanOverride: totSpan, splitAt: split })}
+    ${_renderMicrochartBody(wH, "sh_water", { title: "Water Temperature", subtitle: "Average water temp", icon: "thermo", accent: "#FF8A4C", unit: tUnit, decimals: 1, spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(pH, "sh_power", { title: "Total Power Draw", subtitle: "Combined electrical load", icon: "bolt", accent: "#E8A317", unit: "W", spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(sH, "sh_salt", { title: "Salt Level", subtitle: "Optimal band: 40–80", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD", saltBand: true, spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(heapH, "sh_heap", { title: "ESP32 Free Heap", subtitle: "Collected at 14d @ 6h", icon: "tune", accent: "#4FE3EA", unit: "KB", spanOverride: "14d · 6h" })}
+  </div>`;
+
+  return `${pills}${kpis}${cards}`;
+}
+
 function render() {
   const dot = document.getElementById("connDot"), ctxt = document.getElementById("connTxt");
   dot.style.background = connState === "online" ? "#22c55e" : (connState === "offline" ? "#ef4444" : "#f59e0b");
@@ -873,31 +975,39 @@ function render() {
     if (g.saltControls.length) html += `<div class="sec">Controls</div><div class="card">${g.saltControls.map(renderGenericRow).join("")}</div>`;
     if (g.saltButtons.length) html += `<div class="sec">Maintenance</div><div class="card">${g.saltButtons.map(renderGenericRow).join("")}</div>`;
   } else if (activeTab === "Settings") {
-    if (g.heatUpNum || g.vacNum) {
-      html += `<div class="sec">Temperature presets</div><div class="card">`;
-      for (const [e, title, icon, color] of [[g.heatUpNum,"Heat Up temperature","flame","#F0643C"],[g.vacNum,"Vacation temperature","plane","#1FA2B4"]]) {
-        if (!e) continue;
-        const v = num(e.value), min = num(e.min_value)||79, max = num(e.max_value)||104, stp = num(e.step)||1, dis = connState !== "online" ? "disabled" : "";
-        html += `<div class="row">
-          <span class="ico-badge" style="background:${color}24;color:${color};width:32px;height:32px">${iconSvg(icon,16)}</span>
-          <div class="row-main"><div class="row-t">${title}</div><div class="row-s">Synced on hot tub</div></div>
-          <div class="row-right">
-            <button type="button" class="step-btn" data-pdec="${esc(e.id)}" ${dis||v<=min?"disabled":""}>−</button>
-            <strong style="min-width:44px;text-align:center">${fmt(v,0)}${e.uom||"°F"}</strong>
-            <button type="button" class="step-btn" data-pinc="${esc(e.id)}" ${dis||v>=max?"disabled":""}>+</button>
-          </div>
-        </div>`;
+    html += `<div class="seg">
+      <button type="button" data-stab="general" class="${settingsSubTab==="general"?"act":""}">${iconSvg("tune",15)}<span>General</span></button>
+      <button type="button" data-stab="history" class="${settingsSubTab==="history"?"act":""}">${iconSvg("bolt",15)}<span>History</span></button>
+    </div>`;
+    if (settingsSubTab === "history") {
+      html += renderSettingsHistory(g, isF);
+    } else {
+      if (g.heatUpNum || g.vacNum) {
+        html += `<div class="sec">Temperature presets</div><div class="card">`;
+        for (const [e, title, icon, color] of [[g.heatUpNum,"Heat Up temperature","flame","#F0643C"],[g.vacNum,"Vacation temperature","plane","#1FA2B4"]]) {
+          if (!e) continue;
+          const v = num(e.value), min = num(e.min_value)||79, max = num(e.max_value)||104, stp = num(e.step)||1, dis = connState !== "online" ? "disabled" : "";
+          html += `<div class="row">
+            <span class="ico-badge" style="background:${color}24;color:${color};width:32px;height:32px">${iconSvg(icon,16)}</span>
+            <div class="row-main"><div class="row-t">${title}</div><div class="row-s">Synced on hot tub</div></div>
+            <div class="row-right">
+              <button type="button" class="step-btn" data-pdec="${esc(e.id)}" ${dis||v<=min?"disabled":""}>−</button>
+              <strong style="min-width:44px;text-align:center">${fmt(v,0)}${e.uom||"°F"}</strong>
+              <button type="button" class="step-btn" data-pinc="${esc(e.id)}" ${dis||v>=max?"disabled":""}>+</button>
+            </div>
+          </div>`;
+        }
+        html += `</div>`;
       }
-      html += `</div>`;
-    }
-    if (g.selects.length || g.numbers.length) {
-      html += `<div class="sec">Adjustments</div><div class="card">${g.selects.map(renderGenericRow).join("")}${g.numbers.map(renderGenericRow).join("")}</div>`;
-    }
-    if (g.status.length || g.buttons.length) {
-      html += `<div class="sec">Status & maintenance</div><div class="card">${g.status.map(renderStatusRow).join("")}${g.buttons.map(renderGenericRow).join("")}</div>`;
-    }
-    if (g.config.length || g.histHeap) {
-      html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.histHeap ? `<div style="padding:0 12px 10px">${renderMicrochart(g.histHeap, { title: "ESP32 free heap", icon: "tune", accent: "#4FE3EA", unit: "KB" })}</div>` : ""}${g.config.map(renderGenericRow).join("")}</details>`;
+      if (g.selects.length || g.numbers.length) {
+        html += `<div class="sec">Adjustments</div><div class="card">${g.selects.map(renderGenericRow).join("")}${g.numbers.map(renderGenericRow).join("")}</div>`;
+      }
+      if (g.status.length || g.buttons.length) {
+        html += `<div class="sec">Status & maintenance</div><div class="card">${g.status.map(renderStatusRow).join("")}${g.buttons.map(renderGenericRow).join("")}</div>`;
+      }
+      if (g.config.length || g.histHeap) {
+        html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.histHeap ? `<div style="padding:0 12px 10px">${renderMicrochart(g.histHeap, { title: "ESP32 free heap", icon: "tune", accent: "#4FE3EA", unit: "KB" })}</div>` : ""}${g.config.map(renderGenericRow).join("")}</details>`;
+      }
     }
   }
 
@@ -948,6 +1058,32 @@ function bindHandlers(g) {
     dial.onpointercancel = () => { dragging = false; };
   }
 
+  document.querySelectorAll("[data-stab]").forEach(b => b.onclick = () => {
+    settingsSubTab = b.dataset.stab;
+    render();
+  });
+  document.querySelectorAll("[data-htf]").forEach(b => b.onclick = () => {
+    historyTf = b.dataset.htf;
+    render();
+  });
+  const tip = document.getElementById("mcTip"), tipL = document.getElementById("mcTipLbl"), tipV = document.getElementById("mcTipVal");
+  if (tip) {
+    document.querySelectorAll("[data-tip]").forEach(el => {
+      const show = ev => {
+        const [gid, idxS] = el.dataset.tip.split(":");
+        const entry = _tipData[gid], idx = parseInt(idxS, 10);
+        if (!entry || !entry.h) return;
+        tipL.textContent = historyAxisLabel(entry.h, idx);
+        tipV.textContent = entry.fmtV(entry.h.values[idx]);
+        tip.style.display = "block";
+        tip.style.left = `${Math.min(window.innerWidth - 140, ev.clientX + 10)}px`;
+        tip.style.top = `${Math.max(10, ev.clientY - 44)}px`;
+      };
+      el.onpointerenter = show;
+      el.onpointermove = show;
+      el.onpointerleave = () => { tip.style.display = "none"; };
+    });
+  }
   document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => {
     const [cid, tk] = b.dataset.cr.split(":");
     chartRanges[cid] = tk;

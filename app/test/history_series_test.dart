@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:iq2020_mobile/ui/history_dashboard.dart';
 import 'package:iq2020_mobile/ui/history_series.dart';
 import 'package:iq2020_mobile/ui/sparkline_chart.dart';
 
@@ -120,6 +121,70 @@ void main() {
       await tester.tap(find.text('2yr'));
       await tester.pump();
       expect(find.text('2yr'), findsNWidgets(2)); // pill + span badge
+    });
+
+    testWidgets('SettingsHistoryView renders KPIs and all 6 metrics across all timeframes without overflow',
+        (tester) async {
+      final recentTemp = HistorySeries.parse('6h:${List.generate(56, (i) => (101 + (i % 3) * 0.5).toStringAsFixed(1)).join(',')}');
+      final dailyTemp = HistorySeries.parse('1d@2026-11-27:${List.generate(31, (i) => (101.5 + (i % 3) * 0.3).toStringAsFixed(1)).join(',')}');
+      final monthlyTemp = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => (99.5 + (i % 4)).toStringAsFixed(1)).join(',')}');
+      final recentPower = HistorySeries.parse('6h:${List.generate(56, (i) => '${120 + (i % 5) * 200}').join(',')}');
+      final dailyPower = HistorySeries.parse('1d@2026-11-27:${List.generate(31, (i) => '${450 + i * 5}').join(',')}');
+      final monthlyPower = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => '${400 + (i % 6) * 60}').join(',')}');
+      final dailyEnergy = HistorySeries.parse('1d@2026-11-27:${List.generate(31, (i) => (4.2 + (i % 4) * 0.4).toStringAsFixed(2)).join(',')}');
+      final monthlyEnergy = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => (95 + i * 2).toStringAsFixed(1)).join(',')}');
+      final dailyHeater = HistorySeries.parse('1d@2026-11-27:${List.generate(31, (i) => (2.0 + (i % 3) * 0.5).toStringAsFixed(1)).join(',')}');
+      final monthlyHeater = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => (50 + i).toStringAsFixed(1)).join(',')}');
+      final recentSalt = HistorySeries.parse('6h:48,49,50,51,52');
+      final dailySalt = HistorySeries.parse('1d@2026-11-27:45,47,49,51,53');
+      final monthlySalt = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => '${42 + (i % 10)}').join(',')}');
+      final heap = HistorySeries.parse('6h:224,225,223,226');
+
+      HistoryTimeframe currentTf = HistoryTimeframe.days31;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData.dark(),
+          home: StatefulBuilder(
+            builder: (context, setState) => Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: SettingsHistoryView(
+                  timeframe: currentTf,
+                  onTimeframeChanged: (tf) => setState(() => currentTf = tf),
+                  tempUnit: '°F',
+                  waterRecent: recentTemp,
+                  waterDaily: dailyTemp,
+                  waterMonthly: monthlyTemp,
+                  powerRecent: recentPower,
+                  powerDaily: dailyPower,
+                  powerMonthly: monthlyPower,
+                  energyDaily: dailyEnergy,
+                  energyMonthly: monthlyEnergy,
+                  heaterDaily: dailyHeater,
+                  heaterMonthly: monthlyHeater,
+                  saltRecent: recentSalt,
+                  saltDaily: dailySalt,
+                  saltMonthly: monthlySalt,
+                  freeHeapRecent: heap,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Energy Consumption'), findsOneWidget);
+      expect(find.text('Heater Runtime'), findsNWidgets(2)); // KPI card + chart card
+      expect(find.text('Water Temperature'), findsOneWidget);
+      expect(find.text('Total Power Draw'), findsOneWidget);
+      expect(find.text('Salt Level'), findsNWidgets(2)); // KPI card + chart card
+      expect(find.text('ESP32 Free Heap'), findsOneWidget);
+
+      for (final tf in HistoryTimeframe.values) {
+        await tester.tap(find.text(tf.chipLabel));
+        await tester.pump();
+        expect(find.text(tf.resolutionNote), findsOneWidget);
+      }
     });
   });
 }

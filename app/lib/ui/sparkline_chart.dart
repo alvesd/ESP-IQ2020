@@ -16,36 +16,51 @@ class MicrochartTab {
 
 class MicrochartCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final IconData icon;
   final Color accent;
   final HistorySeries series;
+  final String? spanOverride;
   final String unit;
   final int decimals;
   final MicrochartStyle style;
   final bool showTotal;
+  final (double, double)? optimalBand;
+  final int? splitAt;
+  final EdgeInsetsGeometry margin;
 
   const MicrochartCard({
     super.key,
     required this.title,
+    this.subtitle,
     required this.icon,
     required this.accent,
     required this.series,
+    this.spanOverride,
     this.unit = '',
     this.decimals = 0,
     this.style = MicrochartStyle.line,
     this.showTotal = false,
+    this.optimalBand,
+    this.splitAt,
+    this.margin = const EdgeInsets.only(top: 10),
   });
 
   @override
   Widget build(BuildContext context) => _MicrochartFrame(
         title: title,
+        subtitle: subtitle,
         icon: icon,
         accent: accent,
         series: series,
+        spanOverride: spanOverride,
         unit: unit,
         decimals: decimals,
         style: style,
         showTotal: showTotal,
+        optimalBand: optimalBand,
+        splitAt: splitAt,
+        margin: margin,
       );
 }
 
@@ -120,6 +135,7 @@ class _TabbedMicrochartCardState extends State<TabbedMicrochartCard> {
 
 class _MicrochartFrame extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final IconData icon;
   final Color accent;
   final HistorySeries series;
@@ -128,12 +144,16 @@ class _MicrochartFrame extends StatelessWidget {
   final int decimals;
   final MicrochartStyle style;
   final bool showTotal;
+  final (double, double)? optimalBand;
+  final int? splitAt;
+  final EdgeInsetsGeometry margin;
   final List<MicrochartTab>? tabs;
   final int selectedIndex;
   final ValueChanged<int>? onSelectTab;
 
   const _MicrochartFrame({
     required this.title,
+    this.subtitle,
     required this.icon,
     required this.accent,
     required this.series,
@@ -142,6 +162,9 @@ class _MicrochartFrame extends StatelessWidget {
     this.decimals = 0,
     this.style = MicrochartStyle.line,
     this.showTotal = false,
+    this.optimalBand,
+    this.splitAt,
+    this.margin = const EdgeInsets.only(top: 10),
     this.tabs,
     this.selectedIndex = 0,
     this.onSelectTab,
@@ -165,7 +188,7 @@ class _MicrochartFrame extends StatelessWidget {
     final hasTabs = tabs != null && tabs!.length > 1;
 
     return Card(
-      margin: const EdgeInsets.only(top: 10),
+      margin: margin,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
         child: Column(
@@ -180,10 +203,21 @@ class _MicrochartFrame extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtitle != null && subtitle!.isNotEmpty)
+                        Text(
+                          subtitle!,
+                          style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
                 ),
                 if (span.isNotEmpty)
@@ -237,6 +271,8 @@ class _MicrochartFrame extends StatelessWidget {
                         values: series.values,
                         accent: accent,
                         style: style,
+                        optimalBand: optimalBand,
+                        splitAt: splitAt,
                       ),
                     ),
             ),
@@ -259,12 +295,27 @@ class _MicrochartFrame extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(minOrAvgLabel, style: theme.textTheme.labelSmall?.copyWith(color: muted)),
+                  Flexible(
+                    child: Text(
+                      minOrAvgLabel,
+                      style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
                     '${series.values.length} × ${series.intervalLabel}',
                     style: theme.textTheme.labelSmall?.copyWith(color: muted),
                   ),
-                  Text('Max ${_fmt(maxV)}', style: theme.textTheme.labelSmall?.copyWith(color: muted)),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Max ${_fmt(maxV)}',
+                      style: theme.textTheme.labelSmall?.copyWith(color: muted),
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -314,8 +365,16 @@ class _SparklinePainter extends CustomPainter {
   final List<double?> values;
   final Color accent;
   final MicrochartStyle style;
+  final (double, double)? optimalBand;
+  final int? splitAt;
 
-  const _SparklinePainter({required this.values, required this.accent, required this.style});
+  const _SparklinePainter({
+    required this.values,
+    required this.accent,
+    required this.style,
+    this.optimalBand,
+    this.splitAt,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -326,6 +385,10 @@ class _SparklinePainter extends CustomPainter {
     var maxV = nonNull.reduce(math.max);
     if (style == MicrochartStyle.bars && minV > 0) {
       minV = 0;
+    }
+    if (optimalBand != null) {
+      minV = math.min(minV, math.max(0.0, optimalBand!.$1 - 20));
+      maxV = math.max(maxV, optimalBand!.$2 + 5);
     }
     var range = maxV - minV;
     if (range < 1e-6) {
@@ -344,8 +407,33 @@ class _SparklinePainter extends CustomPainter {
       ..strokeWidth = 1;
     canvas.drawLine(Offset(0, size.height - padY), Offset(size.width, size.height - padY), gridPaint);
 
+    double yAt(double v) => padY + (1.0 - ((v - minV) / range).clamp(0.0, 1.0)) * drawH;
+
+    if (optimalBand != null) {
+      final yTop = yAt(math.min(maxV, optimalBand!.$2));
+      final yBot = yAt(math.max(minV, optimalBand!.$1));
+      if (yBot > yTop) {
+        canvas.drawRect(
+          Rect.fromLTRB(0, yTop, size.width, yBot),
+          Paint()..color = const Color(0xFF22C55E).withValues(alpha: 0.12),
+        );
+      }
+    }
+
+    final n = values.length;
+    if (splitAt != null && splitAt! > 0 && n > splitAt!) {
+      final sx = style == MicrochartStyle.bars
+          ? (splitAt! / n) * size.width
+          : (splitAt! / (n - 1)) * size.width;
+      final splitPaint = Paint()
+        ..color = Colors.white.withValues(alpha: 0.25)
+        ..strokeWidth = 1;
+      for (var y = padY; y < size.height - padY; y += 6) {
+        canvas.drawLine(Offset(sx, y), Offset(sx, math.min(y + 3, size.height - padY)), splitPaint);
+      }
+    }
+
     if (style == MicrochartStyle.bars) {
-      final n = values.length;
       final slotW = size.width / math.max(1, n);
       final barW = math.max(2.0, slotW * 0.64);
       final barPaint = Paint()..style = PaintingStyle.fill;
@@ -366,8 +454,7 @@ class _SparklinePainter extends CustomPainter {
       return;
     }
 
-    double xAt(int i) => values.length <= 1 ? size.width / 2 : (i / (values.length - 1)) * size.width;
-    double yAt(double v) => padY + (1.0 - ((v - minV) / range).clamp(0.0, 1.0)) * drawH;
+    double xAt(int i) => n <= 1 ? size.width / 2 : (i / (n - 1)) * size.width;
 
     final linePaint = Paint()
       ..color = accent
@@ -405,7 +492,7 @@ class _SparklinePainter extends CustomPainter {
     }
 
     Offset? lastPt;
-    for (var i = 0; i < values.length; i++) {
+    for (var i = 0; i < n; i++) {
       final v = values[i];
       if (v == null) {
         flushSegment();
@@ -425,5 +512,9 @@ class _SparklinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_SparklinePainter old) =>
-      old.values != values || old.accent != accent || old.style != style;
+      old.values != values ||
+      old.accent != accent ||
+      old.style != style ||
+      old.optimalBand != optimalBand ||
+      old.splitAt != splitAt;
 }
