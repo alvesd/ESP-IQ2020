@@ -24,6 +24,9 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
+    advanced:
+      sram1_as_iram: true          # MOBILE: reclaim +40KB IRAM on ESP32 rev1.1 bootloader
+      flash_chip: generic          # MOBILE: save IRAM by disabling unused flash chip drivers
     sdkconfig_options:             # MOBILE: allow Cloudflare Tunnel/Access headers (JWT + cookies)
       CONFIG_HTTPD_MAX_REQ_HDR_LEN: "4096"
 
