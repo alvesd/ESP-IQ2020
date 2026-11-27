@@ -77,6 +77,10 @@ void main() {
     c.states[14] = const EntityState(key: 14, text: '6h:101.0,,102.5');
     c.entities[15] = EntityInfo(kind: EntityKind.textSensor, key: 15, objectId: 'history_salt', name: 'History Salt');
     c.states[15] = const EntityState(key: 15, text: '6h:48,50,52');
+    c.entities[16] = EntityInfo(kind: EntityKind.textSensor, key: 16, objectId: 'history_energy', name: 'History Energy');
+    c.states[16] = const EntityState(key: 16, text: '1d@2026-11-27:3.20,4.50');
+    c.entities[17] = EntityInfo(kind: EntityKind.textSensor, key: 17, objectId: 'history_energy_monthly', name: 'History Energy Monthly');
+    c.states[17] = const EntityState(key: 17, text: '1mo@2026-11:110.2,125.4');
 
     final s = SpaSnapshot.fromClient(c, name: 'hotspring');
     expect(s.heatUpTemp.round(), 103);
@@ -86,6 +90,9 @@ void main() {
     expect(s.heatingRate, closeTo(6.5, 0.01));
     expect(s.tempHistory, [101.0, 102.5]);
     expect(s.saltHistory, [48.0, 50.0, 52.0]);
+    expect(s.dailyEnergyHistory, [3.2, 4.5]);
+    expect(s.monthlyEnergyHistory, [110.2, 125.4]);
+    expect(s.monthlyEnergyEndMonth, '2026-11');
 
     final roundTrip = SpaSnapshot.fromMap(s.toMap());
     expect(roundTrip.toMap(), s.toMap());

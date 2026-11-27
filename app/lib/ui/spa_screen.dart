@@ -343,17 +343,25 @@ class _SpaScreenState extends State<SpaScreen> {
           for (final e in [...g.saltSwitches, ...g.switches]) _ToggleTile(client: c, info: e, run: _run),
         ]),
       ],
-      if (g.comfortSensors.isNotEmpty || g.historyWaterTemp != null) ...[
+      if (g.comfortSensors.isNotEmpty ||
+          g.historyWaterTemp != null ||
+          g.historyWaterTempDaily != null ||
+          g.historyWaterTempMonthly != null) ...[
         const _Section('Water'),
         if (g.comfortSensors.isNotEmpty) _SensorGrid(client: c, sensors: g.comfortSensors),
-        if (g.historyWaterTemp != null)
-          MicrochartCard(
+        if (g.historyWaterTemp != null || g.historyWaterTempDaily != null || g.historyWaterTempMonthly != null)
+          TabbedMicrochartCard(
             title: 'Water temperature',
             icon: Icons.thermostat,
             accent: _heatColor,
-            series: HistorySeries.parse(c.states[g.historyWaterTemp!.key]?.text),
             unit: f ? '°F' : '°C',
             decimals: 1,
+            tabs: _avgTabs(
+              c,
+              recent: g.historyWaterTemp,
+              daily: g.historyWaterTempDaily,
+              monthly: g.historyWaterTempMonthly,
+            ),
           ),
       ],
     ];
@@ -371,35 +379,89 @@ class _SpaScreenState extends State<SpaScreen> {
 
   Widget _cardColumn(List<Widget> children) => Card(child: Column(children: children));
 
+  HistorySeries _histSeries(EspHomeClient c, EntityInfo? e) =>
+      e == null ? HistorySeries.empty : HistorySeries.parse(c.states[e.key]?.text);
+
+  List<MicrochartTab> _avgTabs(
+    EspHomeClient c, {
+    required EntityInfo? recent,
+    required EntityInfo? daily,
+    required EntityInfo? monthly,
+  }) {
+    final mSeries = _histSeries(c, monthly);
+    return [
+      MicrochartTab(label: '14d', series: _histSeries(c, recent)),
+      MicrochartTab(label: '31d', series: _histSeries(c, daily)),
+      MicrochartTab(label: '1yr', series: mSeries.lastN(12)),
+      MicrochartTab(label: '2yr', series: mSeries),
+    ];
+  }
+
+  List<MicrochartTab> _totalTabs(
+    EspHomeClient c, {
+    required EntityInfo? daily,
+    required EntityInfo? monthly,
+  }) {
+    final dSeries = _histSeries(c, daily);
+    final mSeries = _histSeries(c, monthly);
+    final mtd = dSeries.thisMonthOnly();
+    return [
+      MicrochartTab(label: 'Month', series: mtd.isNotEmpty ? mtd : dSeries, spanOverride: 'MTD'),
+      MicrochartTab(label: '31d', series: dSeries),
+      MicrochartTab(label: '1yr', series: mSeries.lastN(12)),
+      MicrochartTab(label: '2yr', series: mSeries),
+    ];
+  }
+
   List<Widget> _sensorPage(EspHomeClient c, List<EntityInfo> sensors, String title, String empty) {
     final isPowerTab = title == 'Power';
-    final groups = _EntityGroups(c);
-    final hasPowerCharts = isPowerTab && (groups.historyPower != null || groups.historyEnergy != null);
+    final isUsageTab = title == 'Usage';
+    final g = _EntityGroups(c);
+    final hasPowerCharts = isPowerTab &&
+        (g.historyPower != null ||
+            g.historyPowerDaily != null ||
+            g.historyPowerMonthly != null ||
+            g.historyEnergy != null ||
+            g.historyEnergyMonthly != null);
+    final hasUsageCharts = isUsageTab && (g.historyHeaterDaily != null || g.historyHeaterMonthly != null);
+    final hasCharts = hasPowerCharts || hasUsageCharts;
     return [
-      if (sensors.isEmpty && !hasPowerCharts)
+      if (sensors.isEmpty && !hasCharts)
         _EmptyTab(empty)
       else ...[
         _Section(title),
-        if (isPowerTab && groups.historyPower != null)
-          MicrochartCard(
+        if (isPowerTab && (g.historyPower != null || g.historyPowerDaily != null || g.historyPowerMonthly != null))
+          TabbedMicrochartCard(
             title: 'Total power draw',
             icon: Icons.bolt,
             accent: const Color(0xFFE8A317),
-            series: HistorySeries.parse(c.states[groups.historyPower!.key]?.text),
             unit: 'W',
+            tabs: _avgTabs(c, recent: g.historyPower, daily: g.historyPowerDaily, monthly: g.historyPowerMonthly),
           ),
-        if (isPowerTab && groups.historyEnergy != null)
-          MicrochartCard(
-            title: 'Daily energy',
+        if (isPowerTab && (g.historyEnergy != null || g.historyEnergyMonthly != null))
+          TabbedMicrochartCard(
+            title: 'Energy consumption',
             icon: Icons.bar_chart,
             accent: const Color(0xFF4FE3EA),
-            series: HistorySeries.parse(c.states[groups.historyEnergy!.key]?.text),
             unit: 'kWh',
-            decimals: 2,
+            decimals: 1,
             style: MicrochartStyle.bars,
+            showTotal: true,
+            tabs: _totalTabs(c, daily: g.historyEnergy, monthly: g.historyEnergyMonthly),
+          ),
+        if (hasUsageCharts)
+          TabbedMicrochartCard(
+            title: 'Heater runtime',
+            icon: Icons.local_fire_department,
+            accent: _heatColor,
+            unit: 'h',
+            decimals: 1,
+            style: MicrochartStyle.bars,
+            showTotal: true,
+            tabs: _totalTabs(c, daily: g.historyHeaterDaily, monthly: g.historyHeaterMonthly),
           ),
         if (sensors.isNotEmpty) ...[
-          if (hasPowerCharts) const SizedBox(height: 10),
+          if (hasCharts) const SizedBox(height: 10),
           _SensorGrid(client: c, sensors: sensors),
         ],
       ],
@@ -415,12 +477,12 @@ class _SpaScreenState extends State<SpaScreen> {
       if (level != null) _SaltLevelCard(client: c, info: level, status: g.saltStatus),
       if (level == null && g.saltStatus.isNotEmpty)
         _cardColumn([for (final e in g.saltStatus) _StatusRow(client: c, info: e)]),
-      if (g.historySalt != null)
-        MicrochartCard(
+      if (g.historySalt != null || g.historySaltDaily != null || g.historySaltMonthly != null)
+        TabbedMicrochartCard(
           title: 'Salt level history',
           icon: Icons.water_drop,
           accent: saltAccent,
-          series: saltHist,
+          tabs: _avgTabs(c, recent: g.historySalt, daily: g.historySaltDaily, monthly: g.historySaltMonthly),
         ),
       if (others.isNotEmpty) ...[
         const _Section('Cartridge & generator'),
@@ -566,7 +628,20 @@ class _EntityGroups {
   late final EntityInfo? logoLight;
   late final EntityInfo? heatUpTempNumber, vacationTempNumber;
   late final EntityInfo? readyEtaSecondsSensor, heatingRateSensor, heatingProgressSensor, heatingRateCalibratedSensor, readyTimeTextSensor;
-  late final EntityInfo? historyWaterTemp, historyPower, historyEnergy, historySalt, historyFreeHeap;
+  late final EntityInfo? historyWaterTemp,
+      historyWaterTempDaily,
+      historyWaterTempMonthly,
+      historyPower,
+      historyPowerDaily,
+      historyPowerMonthly,
+      historyEnergy,
+      historyEnergyMonthly,
+      historySalt,
+      historySaltDaily,
+      historySaltMonthly,
+      historyHeaterDaily,
+      historyHeaterMonthly,
+      historyFreeHeap;
   // Freshwater / ACE salt system: everything with "salt" in its id gets its own tab.
   late final List<EntityInfo> saltSensors, saltStatus, saltControls, saltButtons;
   List<EntityInfo> get saltSwitches => saltControls.where((e) => e.kind == EntityKind.switch_).toList();
@@ -589,9 +664,18 @@ class _EntityGroups {
     EntityInfo? hist(String id) =>
         all.where((e) => e.kind == EntityKind.textSensor && e.objectId == id).firstOrNull;
     historyWaterTemp = hist('history_water_temp');
+    historyWaterTempDaily = hist('history_water_temp_daily');
+    historyWaterTempMonthly = hist('history_water_temp_monthly');
     historyPower = hist('history_power');
+    historyPowerDaily = hist('history_power_daily');
+    historyPowerMonthly = hist('history_power_monthly');
     historyEnergy = hist('history_energy');
+    historyEnergyMonthly = hist('history_energy_monthly');
     historySalt = hist('history_salt');
+    historySaltDaily = hist('history_salt_daily');
+    historySaltMonthly = hist('history_salt_monthly');
+    historyHeaterDaily = hist('history_heater_daily');
+    historyHeaterMonthly = hist('history_heater_monthly');
     historyFreeHeap = hist('history_free_heap');
 
     bool isSalt(EntityInfo e) => e.objectId.contains('salt') && !isHistory(e);

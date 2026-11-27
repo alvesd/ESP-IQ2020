@@ -6,6 +6,14 @@ import 'history_series.dart';
 
 enum MicrochartStyle { line, bars }
 
+class MicrochartTab {
+  final String label;
+  final HistorySeries series;
+  final String? spanOverride;
+
+  const MicrochartTab({required this.label, required this.series, this.spanOverride});
+}
+
 class MicrochartCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -14,6 +22,7 @@ class MicrochartCard extends StatelessWidget {
   final String unit;
   final int decimals;
   final MicrochartStyle style;
+  final bool showTotal;
 
   const MicrochartCard({
     super.key,
@@ -24,6 +33,118 @@ class MicrochartCard extends StatelessWidget {
     this.unit = '',
     this.decimals = 0,
     this.style = MicrochartStyle.line,
+    this.showTotal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => _MicrochartFrame(
+        title: title,
+        icon: icon,
+        accent: accent,
+        series: series,
+        unit: unit,
+        decimals: decimals,
+        style: style,
+        showTotal: showTotal,
+      );
+}
+
+class TabbedMicrochartCard extends StatefulWidget {
+  final String title;
+  final IconData icon;
+  final Color accent;
+  final List<MicrochartTab> tabs;
+  final String unit;
+  final int decimals;
+  final MicrochartStyle style;
+  final bool showTotal;
+  final int initialIndex;
+
+  const TabbedMicrochartCard({
+    super.key,
+    required this.title,
+    required this.icon,
+    required this.accent,
+    required this.tabs,
+    this.unit = '',
+    this.decimals = 0,
+    this.style = MicrochartStyle.line,
+    this.showTotal = false,
+    this.initialIndex = 0,
+  });
+
+  @override
+  State<TabbedMicrochartCard> createState() => _TabbedMicrochartCardState();
+}
+
+class _TabbedMicrochartCardState extends State<TabbedMicrochartCard> {
+  late int _selected = widget.initialIndex.clamp(0, math.max(0, widget.tabs.length - 1));
+  bool _userPicked = false;
+
+  @override
+  void didUpdateWidget(TabbedMicrochartCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_selected >= widget.tabs.length) {
+      _selected = 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.tabs.isEmpty) return const SizedBox.shrink();
+    var idx = _selected.clamp(0, widget.tabs.length - 1);
+    if (!_userPicked && widget.tabs[idx].series.isEmpty) {
+      final firstNonEmpty = widget.tabs.indexWhere((t) => t.series.isNotEmpty);
+      if (firstNonEmpty >= 0) idx = firstNonEmpty;
+    }
+    final active = widget.tabs[idx];
+    return _MicrochartFrame(
+      title: widget.title,
+      icon: widget.icon,
+      accent: widget.accent,
+      series: active.series,
+      spanOverride: active.spanOverride,
+      unit: widget.unit,
+      decimals: widget.decimals,
+      style: widget.style,
+      showTotal: widget.showTotal,
+      tabs: widget.tabs,
+      selectedIndex: idx,
+      onSelectTab: (i) => setState(() {
+        _selected = i;
+        _userPicked = true;
+      }),
+    );
+  }
+}
+
+class _MicrochartFrame extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color accent;
+  final HistorySeries series;
+  final String? spanOverride;
+  final String unit;
+  final int decimals;
+  final MicrochartStyle style;
+  final bool showTotal;
+  final List<MicrochartTab>? tabs;
+  final int selectedIndex;
+  final ValueChanged<int>? onSelectTab;
+
+  const _MicrochartFrame({
+    required this.title,
+    required this.icon,
+    required this.accent,
+    required this.series,
+    this.spanOverride,
+    this.unit = '',
+    this.decimals = 0,
+    this.style = MicrochartStyle.line,
+    this.showTotal = false,
+    this.tabs,
+    this.selectedIndex = 0,
+    this.onSelectTab,
   });
 
   String _fmt(double? v) {
@@ -36,10 +157,12 @@ class MicrochartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final latest = series.latest;
-    final minV = series.min;
+    final heroValue = showTotal ? series.sum : series.latest;
+    final minOrAvg = showTotal ? series.average : series.min;
+    final minOrAvgLabel = showTotal ? 'Avg ${_fmt(minOrAvg)}' : 'Min ${_fmt(minOrAvg)}';
     final maxV = series.max;
-    final span = series.spanLabel;
+    final span = spanOverride ?? series.spanLabel;
+    final hasTabs = tabs != null && tabs!.length > 1;
 
     return Card(
       margin: const EdgeInsets.only(top: 10),
@@ -77,11 +200,31 @@ class MicrochartCard extends StatelessWidget {
                   ),
                 const SizedBox(width: 8),
                 Text(
-                  _fmt(latest),
+                  _fmt(heroValue),
                   style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
+            if (hasTabs) ...[
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < tabs!.length; i++)
+                      Padding(
+                        padding: EdgeInsets.only(right: i + 1 < tabs!.length ? 6 : 0),
+                        child: _RangePill(
+                          label: tabs![i].label,
+                          selected: i == selectedIndex,
+                          accent: accent,
+                          onTap: () => onSelectTab?.call(i),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             SizedBox(
               height: 54,
@@ -98,11 +241,25 @@ class MicrochartCard extends StatelessWidget {
                     ),
             ),
             if (series.isNotEmpty) ...[
-              const SizedBox(height: 6),
+              if (series.values.length >= 2) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(series.labelForIndex(0), style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: muted)),
+                    if (series.values.length >= 5)
+                      Text(series.labelForIndex(series.values.length ~/ 2),
+                          style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: muted)),
+                    Text(series.labelForIndex(series.values.length - 1),
+                        style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: muted)),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Min ${_fmt(minV)}', style: theme.textTheme.labelSmall?.copyWith(color: muted)),
+                  Text(minOrAvgLabel, style: theme.textTheme.labelSmall?.copyWith(color: muted)),
                   Text(
                     '${series.values.length} × ${series.intervalLabel}',
                     style: theme.textTheme.labelSmall?.copyWith(color: muted),
@@ -112,6 +269,41 @@ class MicrochartCard extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RangePill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _RangePill({required this.label, required this.selected, required this.accent, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.22) : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? accent.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: selected ? accent : theme.colorScheme.onSurfaceVariant,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
       ),
     );

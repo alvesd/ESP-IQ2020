@@ -442,6 +442,28 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
             values: snap.saltHistory,
             accent: (snap.salt == null ? null : ui.saltZone(snap.salt!)?.$2) ?? SpaColors.aqua,
           ),
+        if (snap.dailyEnergyHistory.isNotEmpty)
+          _WatchMicrochart(
+            title: '${snap.dailyEnergyHistory.length}d Energy',
+            values: snap.dailyEnergyHistory,
+            accent: SpaColors.aqua,
+            unit: ' kWh',
+            decimals: 1,
+            bars: true,
+            showTotal: true,
+          ),
+        if (snap.monthlyEnergyHistory.isNotEmpty)
+          _WatchMicrochart(
+            title: snap.monthlyEnergyHistory.length > 12
+                ? '2yr Energy'
+                : '${snap.monthlyEnergyHistory.length}mo Energy',
+            values: snap.monthlyEnergyHistory,
+            accent: SpaColors.aqua,
+            unit: ' kWh',
+            decimals: 0,
+            bars: true,
+            showTotal: true,
+          ),
       ],
     );
   }
@@ -453,12 +475,16 @@ class _WatchMicrochart extends StatelessWidget {
   final Color accent;
   final String unit;
   final int decimals;
+  final bool bars;
+  final bool showTotal;
   const _WatchMicrochart({
     required this.title,
     required this.values,
     required this.accent,
     this.unit = '',
     this.decimals = 0,
+    this.bars = false,
+    this.showTotal = false,
   });
 
   @override
@@ -466,7 +492,9 @@ class _WatchMicrochart extends StatelessWidget {
     final theme = Theme.of(context);
     final minV = values.reduce(math.min);
     final maxV = values.reduce(math.max);
+    final sumV = values.fold<double>(0.0, (a, b) => a + b);
     String fmt(double v) => '${decimals == 0 ? v.round() : v.toStringAsFixed(decimals)}$unit';
+    final badge = showTotal ? fmt(sumV) : '${fmt(minV)}–${fmt(maxV)}';
     return Container(
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
@@ -478,13 +506,13 @@ class _WatchMicrochart extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(title, style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
-          Text('${fmt(minV)}–${fmt(maxV)}',
+          Text(badge,
               style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: theme.colorScheme.onSurfaceVariant)),
         ]),
         const SizedBox(height: 4),
         SizedBox(
           height: 28,
-          child: CustomPaint(painter: _WearSparkPainter(values: values, accent: accent)),
+          child: CustomPaint(painter: _WearSparkPainter(values: values, accent: accent, bars: bars)),
         ),
       ]),
     );
@@ -494,20 +522,39 @@ class _WatchMicrochart extends StatelessWidget {
 class _WearSparkPainter extends CustomPainter {
   final List<double> values;
   final Color accent;
-  const _WearSparkPainter({required this.values, required this.accent});
+  final bool bars;
+  const _WearSparkPainter({required this.values, required this.accent, this.bars = false});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.isEmpty || size.width <= 0 || size.height <= 0) return;
     var minV = values.reduce(math.min);
     final maxV = values.reduce(math.max);
+    if (bars && minV > 0) minV = 0;
     var rng = maxV - minV;
     if (rng < 1e-6) {
       rng = 1.0;
-      minV -= 0.5;
+      if (!bars) minV -= 0.5;
     }
     const pad = 2.0;
     final h = math.max(1.0, size.height - pad * 2);
+    if (bars) {
+      final n = values.length;
+      final sw = size.width / math.max(1, n);
+      final bw = math.max(1.5, sw * 0.64);
+      final paint = Paint()..style = PaintingStyle.fill;
+      for (var i = 0; i < n; i++) {
+        final frac = ((values[i] - minV) / rng).clamp(0.06, 1.0);
+        final bh = frac * h;
+        final x = i * sw + (sw - bw) / 2;
+        paint.color = i == n - 1 ? accent : accent.withValues(alpha: 0.55);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(x, pad + (h - bh), bw, bh), const Radius.circular(1.5)),
+          paint,
+        );
+      }
+      return;
+    }
     double xAt(int i) => values.length <= 1 ? size.width / 2 : (i / (values.length - 1)) * size.width;
     double yAt(double v) => pad + (1.0 - ((v - minV) / rng).clamp(0.0, 1.0)) * h;
     if (values.length == 1) {
@@ -531,7 +578,7 @@ class _WearSparkPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_WearSparkPainter old) => old.values != values || old.accent != accent;
+  bool shouldRepaint(_WearSparkPainter old) => old.values != values || old.accent != accent || old.bars != bars;
 }
 
 class _WearPresetChip extends StatelessWidget {

@@ -33,6 +33,9 @@ struct SpaSnapshot: Equatable {
   let heatingRate: Double?
   let tempHistory: [Double]
   let saltHistory: [Double]
+  let dailyEnergyHistory: [Double]
+  let monthlyEnergyHistory: [Double]
+  let monthlyEnergyEndMonth: String?
 
   init?(_ m: [String: Any]) {
     guard let name = m["name"] as? String else { return nil }
@@ -62,6 +65,9 @@ struct SpaSnapshot: Equatable {
     heatingRate = num("heatingRate")
     tempHistory = (m["tempHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
     saltHistory = (m["saltHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
+    dailyEnergyHistory = (m["dailyEnergyHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
+    monthlyEnergyHistory = (m["monthlyEnergyHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
+    monthlyEnergyEndMonth = m["monthlyEnergyEndMonth"] as? String
   }
 
   /// Target moved by `steps`, snapped to the step and clamped to the range.

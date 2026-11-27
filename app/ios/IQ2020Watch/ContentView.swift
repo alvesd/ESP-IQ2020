@@ -310,6 +310,28 @@ struct ContentView: View {
             decimals: 0
           )
         }
+        if !s.dailyEnergyHistory.isEmpty {
+          WatchSparklineCard(
+            title: "\(s.dailyEnergyHistory.count)d Energy",
+            values: s.dailyEnergyHistory,
+            accent: aqua,
+            unit: " kWh",
+            decimals: 1,
+            bars: true,
+            showTotal: true
+          )
+        }
+        if !s.monthlyEnergyHistory.isEmpty {
+          WatchSparklineCard(
+            title: s.monthlyEnergyHistory.count > 12 ? "2yr Energy" : "\(s.monthlyEnergyHistory.count)mo Energy",
+            values: s.monthlyEnergyHistory,
+            accent: aqua,
+            unit: " kWh",
+            decimals: 0,
+            bars: true,
+            showTotal: true
+          )
+        }
 
         if let error = store.error {
           Text(error).font(.caption2).foregroundStyle(.orange).multilineTextAlignment(.center)
@@ -325,6 +347,8 @@ private struct WatchSparklineCard: View {
   let accent: Color
   let unit: String
   let decimals: Int
+  var bars: Bool = false
+  var showTotal: Bool = false
 
   private func fmt(_ v: Double) -> String {
     let s = decimals == 0 ? String(format: "%.0f", v) : String(format: "%.\(decimals)f", v)
@@ -332,36 +356,59 @@ private struct WatchSparklineCard: View {
   }
 
   var body: some View {
-    let minV = values.min() ?? 0
+    let rawMin = values.min() ?? 0
     let maxV = values.max() ?? 0
+    let minV = (bars && rawMin > 0) ? 0 : rawMin
+    let sumV = values.reduce(0, +)
+    let badge = showTotal ? fmt(sumV) : "\(fmt(rawMin))–\(fmt(maxV))"
     VStack(alignment: .leading, spacing: 4) {
       HStack {
         Text(title).font(.caption2.weight(.semibold))
         Spacer()
-        Text("\(fmt(minV))–\(fmt(maxV))")
+        Text(badge)
           .font(.system(size: 10))
           .foregroundStyle(.secondary)
       }
       GeometryReader { geo in
         let w = geo.size.width
         let h = geo.size.height
-        let lo = (maxV - minV) < 1e-6 ? minV - 0.5 : minV
-        let rng = max(1e-6, (maxV - minV) < 1e-6 ? 1.0 : (maxV - minV))
-        let pts: [CGPoint] = values.enumerated().map { idx, val in
-          let x = values.count <= 1 ? w / 2 : (CGFloat(idx) / CGFloat(values.count - 1)) * w
-          let y = 2 + (1 - CGFloat((val - lo) / rng)) * max(1, h - 4)
-          return CGPoint(x: x, y: y)
-        }
-        ZStack {
-          if pts.count >= 2 {
-            Path { p in
-              p.move(to: pts[0])
-              for pt in pts.dropFirst() { p.addLine(to: pt) }
+        let diff = maxV - minV
+        let lo = (diff < 1e-6 && !bars) ? minV - 0.5 : minV
+        let rng = max(1e-6, diff < 1e-6 ? 1.0 : diff)
+        if bars {
+          let n = values.count
+          let sw = w / CGFloat(max(1, n))
+          let bw = max(1.5, sw * 0.64)
+          let drawH = max(1, h - 4)
+          ZStack(alignment: .topLeading) {
+            ForEach(Array(values.enumerated()), id: \.offset) { idx, val in
+              let frac = min(1.0, max(0.06, (val - lo) / rng))
+              let bh = CGFloat(frac) * drawH
+              let x = CGFloat(idx) * sw + (sw - bw) / 2
+              let y = 2 + (drawH - bh)
+              RoundedRectangle(cornerRadius: 1.5)
+                .fill(idx == n - 1 ? accent : accent.opacity(0.55))
+                .frame(width: bw, height: bh)
+                .offset(x: x, y: y)
             }
-            .stroke(accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
           }
-          if let last = pts.last {
-            Circle().fill(.white).frame(width: 4.5, height: 4.5).position(last)
+        } else {
+          let pts: [CGPoint] = values.enumerated().map { idx, val in
+            let x = values.count <= 1 ? w / 2 : (CGFloat(idx) / CGFloat(values.count - 1)) * w
+            let y = 2 + (1 - CGFloat((val - lo) / rng)) * max(1, h - 4)
+            return CGPoint(x: x, y: y)
+          }
+          ZStack {
+            if pts.count >= 2 {
+              Path { p in
+                p.move(to: pts[0])
+                for pt in pts.dropFirst() { p.addLine(to: pt) }
+              }
+              .stroke(accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+            }
+            if let last = pts.last {
+              Circle().fill(.white).frame(width: 4.5, height: 4.5).position(last)
+            }
           }
         }
       }

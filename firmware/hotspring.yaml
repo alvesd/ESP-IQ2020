@@ -478,7 +478,7 @@ text_sensor:
       name: "ESP Reset Reason"
       entity_category: diagnostic
 
-iq2020_history:                          # MOBILE: NVS-persisted 14-day metrics for phone/web/watch microcharts
+iq2020_history:                          # MOBILE: NVS-persisted 3-tier metrics (14d@6h, 31d@1d, 24mo@1mo)
   id: spa_history
   time_id: sntp_time
   bucket_hours: 6
@@ -487,14 +487,33 @@ iq2020_history:                          # MOBILE: NVS-persisted 14-day metrics 
   energy_ids: [pumps_energy, controller_energy, heater_energy]
   salt_id: salt_level_sensor
   free_heap_id: esp_free_heap
+  heater_runtime_id: heater_total_runtime
   water_temp:
     name: "History Water Temp"
+  water_temp_daily:
+    name: "History Water Temp Daily"
+  water_temp_monthly:
+    name: "History Water Temp Monthly"
   power:
     name: "History Power"
+  power_daily:
+    name: "History Power Daily"
+  power_monthly:
+    name: "History Power Monthly"
   energy:
     name: "History Energy"
+  energy_monthly:
+    name: "History Energy Monthly"
   salt:
     name: "History Salt"
+  salt_daily:
+    name: "History Salt Daily"
+  salt_monthly:
+    name: "History Salt Monthly"
+  heater_daily:
+    name: "History Heater Daily"
+  heater_monthly:
+    name: "History Heater Monthly"
   free_heap:
     name: "History Free Heap"
 

@@ -110,7 +110,11 @@ button,select,input{font:inherit;color:inherit}
 .mc-hd{display:flex;align-items:center;gap:8px}
 .mc-badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}
 .mc-val{font-size:14px;font-weight:700}
+.mc-tabs{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
+.mc-tab{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.mc-tab.act{font-weight:700}
 .mc-svg{width:100%;height:54px;display:block;margin-top:8px}
+.mc-ax{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
 .mc-ft{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
 @media(min-width:640px){body{padding-bottom:24px}.bbar{display:none}.nav-top{display:flex}.grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
@@ -360,8 +364,12 @@ function groupEntities() {
     status: [...kind("binary_sensor"), ...kind("text_sensor").filter(e => e !== logoLight && e !== readyTime)],
     buttons: kind("button"),
     config, comfort, power, usage, logoLight, heatUpNum, vacNum, etaSec, etaCal, etaProg, readyTime,
-    histWater: hist("history_water_temp"), histPower: hist("history_power"),
-    histEnergy: hist("history_energy"), histSalt: hist("history_salt"), histHeap: hist("history_free_heap"),
+    histWater: hist("history_water_temp"), histWaterD: hist("history_water_temp_daily"), histWaterM: hist("history_water_temp_monthly"),
+    histPower: hist("history_power"), histPowerD: hist("history_power_daily"), histPowerM: hist("history_power_monthly"),
+    histEnergy: hist("history_energy"), histEnergyM: hist("history_energy_monthly"),
+    histSalt: hist("history_salt"), histSaltD: hist("history_salt_daily"), histSaltM: hist("history_salt_monthly"),
+    histHeatD: hist("history_heater_daily"), histHeatM: hist("history_heater_monthly"),
+    histHeap: hist("history_free_heap"),
     saltSensors, saltStatus, saltControls, saltButtons,
     saltLevel: saltSensors.find(e => oid(e) === "salt_level" || oid(e) === "salt_content"),
     saltPower: saltControls.find(e => e.domain === "number" && (oid(e).includes("power") || oid(e).includes("output"))) || saltControls.find(e => e.domain === "number"),
@@ -640,27 +648,87 @@ function renderGenericRow(e) {
   return renderStatusRow(e);
 }
 
+const chartRanges = {};
+const _MC_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function _buildParsedSeries(prefix, hours, isMonthly, isDaily, endDate, values, spanOverride=null) {
+  const nn = values.filter(v => v !== null);
+  if (!nn.length) return null;
+  let span = spanOverride;
+  if (!span) {
+    if (isMonthly) span = (values.length >= 12 && values.length % 12 === 0) ? `${values.length / 12}yr` : `${values.length}mo`;
+    else if (isDaily) span = `${values.length}d`;
+    else { const totH = values.length * hours; span = totH >= 24 ? `${Math.round(totH / 24)}d` : `${totH}h`; }
+  }
+  let latest = null;
+  for (let i = values.length - 1; i >= 0; i--) { if (values[i] !== null) { latest = values[i]; break; } }
+  const sum = nn.reduce((a, b) => a + b, 0);
+  const avg = sum / nn.length;
+  return { prefix, hours, isMonthly, isDaily, endDate, span, values, min: Math.min(...nn), max: Math.max(...nn), sum, avg, latest };
+}
+
 function parseHistory(raw) {
   const s = String(raw || "").trim();
   const c = s.indexOf(":");
   if (c <= 0) return null;
-  const prefix = s.slice(0, c).trim(), body = s.slice(c + 1);
+  const rawPrefix = s.slice(0, c).trim(), body = s.slice(c + 1);
   if (!body.trim()) return null;
-  const hours = prefix.endsWith("d") ? (parseInt(prefix, 10) || 1) * 24 : (parseInt(prefix, 10) || 6);
+  let prefix = rawPrefix, endDate = null;
+  const at = rawPrefix.indexOf("@");
+  if (at > 0) {
+    prefix = rawPrefix.slice(0, at).trim();
+    const parts = rawPrefix.slice(at + 1).trim().split("-").map(x => parseInt(x, 10));
+    if (parts.length === 3 && parts.every(Number.isFinite)) endDate = { y: parts[0], m: parts[1], d: parts[2] };
+    else if (parts.length === 2 && parts.every(Number.isFinite)) endDate = { y: parts[0], m: parts[1], d: 1 };
+  }
+  const isMonthly = prefix.endsWith("mo"), isDaily = !isMonthly && prefix.endsWith("d");
+  const hours = isMonthly ? (parseInt(prefix, 10) || 1) * 720 : (isDaily ? (parseInt(prefix, 10) || 1) * 24 : (parseInt(prefix, 10) || 6));
   const values = body.split(",").map(t => { const v = parseFloat(t.trim()); return Number.isFinite(v) ? v : null; });
-  const nn = values.filter(v => v !== null);
-  if (!nn.length) return null;
-  const totH = values.length * hours;
-  const span = totH >= 24 ? `${Math.round(totH / 24)}d` : `${totH}h`;
-  let latest = null;
-  for (let i = values.length - 1; i >= 0; i--) { if (values[i] !== null) { latest = values[i]; break; } }
-  return { prefix, span, values, min: Math.min(...nn), max: Math.max(...nn), latest };
+  return _buildParsedSeries(prefix, hours, isMonthly, isDaily, endDate, values);
 }
 
-function renderMicrochart(entity, { title, icon, accent, unit="", decimals=0, bars=false }) {
-  if (!entity) return "";
-  const h = parseHistory(entity.state);
-  const fmtV = v => v === null ? "—" : `${decimals === 0 ? Math.round(v) : v.toFixed(decimals)}${unit ? " " + unit : ""}`;
+function sliceLastN(h, n) {
+  if (!h || h.values.length <= n) return h;
+  return _buildParsedSeries(h.prefix, h.hours, h.isMonthly, h.isDaily, h.endDate, h.values.slice(h.values.length - n));
+}
+
+function sliceThisMonth(h) {
+  if (!h || !h.isDaily || !h.endDate) return h;
+  const e = h.endDate, len = h.values.length;
+  let first = len;
+  for (let i = 0; i < len; i++) {
+    const dt = new Date(e.y, e.m - 1, e.d - (len - 1 - i));
+    if (dt.getFullYear() === e.y && dt.getMonth() === (e.m - 1)) { first = i; break; }
+  }
+  if (first >= len) return h;
+  return _buildParsedSeries(h.prefix, h.hours, h.isMonthly, h.isDaily, h.endDate, h.values.slice(first), "MTD") || h;
+}
+
+function historyAxisLabel(h, idx) {
+  const off = h.values.length - 1 - idx, e = h.endDate;
+  if (h.isMonthly) {
+    if (e) {
+      const tm = e.y * 12 + (e.m - 1) - off;
+      const m = ((tm % 12) + 12) % 12, y = Math.floor(tm / 12);
+      const mon = _MC_MONTHS[m];
+      return h.values.length > 12 ? `${mon} '${String(y % 100).padStart(2, "0")}` : mon;
+    }
+    return off === 0 ? "Now" : `-${off}m`;
+  }
+  if (h.isDaily) {
+    if (e) {
+      const dt = new Date(e.y, e.m - 1, e.d - off);
+      return `${_MC_MONTHS[dt.getMonth()]} ${dt.getDate()}`;
+    }
+    return off === 0 ? "Today" : `-${off}d`;
+  }
+  if (off === 0) return "Now";
+  const hrs = off * h.hours;
+  return hrs >= 24 ? `-${Math.round(hrs / 24)}d` : `-${hrs}h`;
+}
+
+function _renderMicrochartBody(h, gid, { title, icon, accent, unit="", decimals=0, bars=false, showTotal=false, tabsHtml="" }) {
+  const fmtV = v => v === null || v === undefined ? "—" : `${decimals === 0 ? Math.round(v) : v.toFixed(decimals)}${unit ? " " + unit : ""}`;
   let body = `<div style="height:54px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Collecting history…</div>`;
   if (h) {
     const W = 300, H = 54, pad = 4, dH = H - pad * 2;
@@ -670,7 +738,7 @@ function renderMicrochart(entity, { title, icon, accent, unit="", decimals=0, ba
     if (rng < 1e-6) { rng = 1; if (!bars) lo -= 0.5; }
     let shapes = `<line x1="0" y1="${H-pad}" x2="${W}" y2="${H-pad}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
     if (bars) {
-      const n = h.values.length, sw = W / Math.max(1, n), bw = Math.max(3, sw * 0.64);
+      const n = h.values.length, sw = W / Math.max(1, n), bw = Math.max(2, sw * 0.64);
       h.values.forEach((v, i) => {
         if (v === null) return;
         const frac = Math.max(0.05, Math.min(1, (v - lo) / rng)), bh = frac * dH;
@@ -681,7 +749,6 @@ function renderMicrochart(entity, { title, icon, accent, unit="", decimals=0, ba
       const n = h.values.length;
       const xAt = i => n <= 1 ? W / 2 : (i / (n - 1)) * W;
       const yAt = v => pad + (1 - Math.max(0, Math.min(1, (v - lo) / rng))) * dH;
-      const gid = `mcg_${oid(entity)}`;
       let defs = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${accent}" stop-opacity="0.30"/><stop offset="100%" stop-color="${accent}" stop-opacity="0"/></linearGradient></defs>`;
       let seg = [], lastPt = null;
       const flush = () => {
@@ -704,17 +771,62 @@ function renderMicrochart(entity, { title, icon, accent, unit="", decimals=0, ba
       if (lastPt) shapes += `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3.8" fill="#fff"/><circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="2.3" fill="${accent}"/>`;
       shapes = defs + shapes;
     }
-    body = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="mc-svg">${shapes}</svg>
-      <div class="mc-ft"><span>Min ${esc(fmtV(h.min))}</span><span>${h.values.length} × ${esc(h.prefix)}</span><span>Max ${esc(fmtV(h.max))}</span></div>`;
+    const axHtml = h.values.length >= 2 ? `<div class="mc-ax"><span>${esc(historyAxisLabel(h, 0))}</span>${h.values.length >= 5 ? `<span>${esc(historyAxisLabel(h, Math.floor(h.values.length / 2)))}</span>` : ""}<span>${esc(historyAxisLabel(h, h.values.length - 1))}</span></div>` : "";
+    const leftStat = showTotal ? `Avg ${esc(fmtV(h.avg))}` : `Min ${esc(fmtV(h.min))}`;
+    body = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="mc-svg">${shapes}</svg>${axHtml}
+      <div class="mc-ft"><span>${leftStat}</span><span>${h.values.length} × ${esc(h.prefix)}</span><span>Max ${esc(fmtV(h.max))}</span></div>`;
   }
+  const heroVal = h ? fmtV(showTotal ? h.sum : h.latest) : "—";
   return `<div class="card mc">
     <div class="mc-hd">
       <span class="ico-badge" style="background:${accent}24;color:${accent};width:28px;height:28px">${iconSvg(icon,14)}</span>
       <span style="font-size:13.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
       ${h?`<span class="mc-badge" style="background:${accent}24;color:${accent}">${esc(h.span)}</span>`:""}
-      <span class="mc-val">${esc(h ? fmtV(h.latest) : "—")}</span>
-    </div>${body}
+      <span class="mc-val">${esc(heroVal)}</span>
+    </div>${tabsHtml}${body}
   </div>`;
+}
+
+function renderMicrochart(entity, opts) {
+  if (!entity) return "";
+  return _renderMicrochartBody(parseHistory(entity.state), `mcg_${oid(entity)}`, opts);
+}
+
+function renderTabbedMicrochart(chartId, tabs, opts) {
+  if (!tabs.some(t => t.present)) return "";
+  let key = chartRanges[chartId];
+  if (!key || !tabs.some(t => t.key === key)) {
+    const firstWithData = tabs.find(t => t.series);
+    key = firstWithData ? firstWithData.key : tabs[0].key;
+  }
+  const active = tabs.find(t => t.key === key) || tabs[0];
+  const tabsHtml = `<div class="mc-tabs">${tabs.map(t => {
+    const act = t.key === active.key;
+    const st = act ? ` style="background:${opts.accent}33;border-color:${opts.accent};color:${opts.accent}"` : "";
+    return `<button type="button" class="mc-tab${act?" act":""}" data-cr="${esc(chartId)}:${esc(t.key)}"${st}>${esc(t.label)}</button>`;
+  }).join("")}</div>`;
+  return _renderMicrochartBody(active.series, `mcg_${chartId}_${active.key}`, { ...opts, tabsHtml });
+}
+
+function avgTabsFor(recent, daily, monthly) {
+  const mSeries = monthly ? parseHistory(monthly.state) : null;
+  return [
+    { key: "14d", label: "14d", present: !!recent, series: recent ? parseHistory(recent.state) : null },
+    { key: "31d", label: "31d", present: !!daily, series: daily ? parseHistory(daily.state) : null },
+    { key: "1yr", label: "1yr", present: !!monthly, series: sliceLastN(mSeries, 12) },
+    { key: "2yr", label: "2yr", present: !!monthly, series: mSeries },
+  ];
+}
+
+function totalTabsFor(daily, monthly) {
+  const dSeries = daily ? parseHistory(daily.state) : null;
+  const mSeries = monthly ? parseHistory(monthly.state) : null;
+  return [
+    { key: "mtd", label: "Month", present: !!daily, series: sliceThisMonth(dSeries) },
+    { key: "31d", label: "31d", present: !!daily, series: dSeries },
+    { key: "1yr", label: "1yr", present: !!monthly, series: sliceLastN(mSeries, 12) },
+    { key: "2yr", label: "2yr", present: !!monthly, series: mSeries },
+  ];
 }
 
 function render() {
@@ -743,19 +855,20 @@ function render() {
       html += g.saltAdj.map(e => e.domain === "number" ? renderNumberRow(e, true) : `<div class="card" style="margin-bottom:12px">${renderGenericRow(e)}</div>`).join("");
       html += `<div class="grid grid-wide">${[...g.saltSwitches, ...g.switches].map(e => renderBigTile(e, false)).join("")}</div>`;
     }
-    if (g.comfort.length || g.histWater) html += `<div class="sec">Water</div>${g.comfort.length ? renderSensors(g.comfort) : ""}${renderMicrochart(g.histWater, { title: "Water temperature", icon: "thermo", accent: "#FF8A4C", unit: isF ? "°F" : "°C", decimals: 1 })}`;
+    if (g.comfort.length || g.histWater || g.histWaterD || g.histWaterM) html += `<div class="sec">Water</div>${g.comfort.length ? renderSensors(g.comfort) : ""}${renderTabbedMicrochart("water", avgTabsFor(g.histWater, g.histWaterD, g.histWaterM), { title: "Water temperature", icon: "thermo", accent: "#FF8A4C", unit: isF ? "°F" : "°C", decimals: 1 })}`;
   } else if (activeTab === "Power") {
-    const hasP = g.power.length || g.histPower || g.histEnergy;
-    html += hasP ? `<div class="sec">Power</div>${renderMicrochart(g.histPower, { title: "Total power draw", icon: "bolt", accent: "#E8A317", unit: "W" })}${renderMicrochart(g.histEnergy, { title: "Daily energy", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: 2, bars: true })}${g.power.length ? `<div style="margin-top:10px">${renderSensors(g.power)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No power readings configured.</div>`;
+    const hasP = g.power.length || g.histPower || g.histPowerD || g.histPowerM || g.histEnergy || g.histEnergyM;
+    html += hasP ? `<div class="sec">Power</div>${renderTabbedMicrochart("power", avgTabsFor(g.histPower, g.histPowerD, g.histPowerM), { title: "Total power draw", icon: "bolt", accent: "#E8A317", unit: "W" })}${renderTabbedMicrochart("energy", totalTabsFor(g.histEnergy, g.histEnergyM), { title: "Energy consumption", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: 1, bars: true, showTotal: true })}${g.power.length ? `<div style="margin-top:10px">${renderSensors(g.power)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No power readings configured.</div>`;
   } else if (activeTab === "Usage") {
-    html += g.usage.length ? `<div class="sec">Runtime & timers</div>${renderSensors(g.usage)}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No runtime counters configured.</div>`;
+    const hasU = g.usage.length || g.histHeatD || g.histHeatM;
+    html += hasU ? `<div class="sec">Runtime & timers</div>${renderTabbedMicrochart("heater", totalTabsFor(g.histHeatD, g.histHeatM), { title: "Heater runtime", icon: "flame", accent: "#FF8A4C", unit: "h", decimals: 1, bars: true, showTotal: true })}${g.usage.length ? `<div style="margin-top:10px">${renderSensors(g.usage)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No runtime counters configured.</div>`;
   } else if (activeTab === "Salt") {
     const others = g.saltSensors.filter(e => e !== g.saltLevel);
     if (g.saltLevel) html += renderSaltGauge(g.saltLevel, g.saltStatus);
     else if (g.saltStatus.length) html += `<div class="card">${g.saltStatus.map(renderStatusRow).join("")}</div>`;
     const sHist = g.histSalt ? parseHistory(g.histSalt.state) : null;
     const sZone = sHist && sHist.latest !== null ? saltZone(sHist.latest) : null;
-    html += renderMicrochart(g.histSalt, { title: "Salt level history", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD" });
+    html += renderTabbedMicrochart("salt", avgTabsFor(g.histSalt, g.histSaltD, g.histSaltM), { title: "Salt level history", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD" });
     if (others.length) html += `<div class="sec">Cartridge & generator</div>${renderSensors(others)}`;
     if (g.saltControls.length) html += `<div class="sec">Controls</div><div class="card">${g.saltControls.map(renderGenericRow).join("")}</div>`;
     if (g.saltButtons.length) html += `<div class="sec">Maintenance</div><div class="card">${g.saltButtons.map(renderGenericRow).join("")}</div>`;
@@ -835,6 +948,11 @@ function bindHandlers(g) {
     dial.onpointercancel = () => { dragging = false; };
   }
 
+  document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => {
+    const [cid, tk] = b.dataset.cr.split(":");
+    chartRanges[cid] = tk;
+    render();
+  });
   document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => cl && post(`/climate/${encName(cl)}/set?mode=${encodeURIComponent(b.dataset.mode)}`));
   document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => cl && post(`/climate/${encName(cl)}/set?preset=${encodeURIComponent(b.dataset.preset)}`));
   document.querySelectorAll("[data-tile]").forEach(b => b.onclick = () => {

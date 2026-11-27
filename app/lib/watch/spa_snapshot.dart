@@ -43,6 +43,9 @@ class SpaSnapshot {
   final double? heatingRate; // °F/h (or °C/h) from ESP32
   final List<double> tempHistory; // 14-day water temp samples
   final List<double> saltHistory; // 14-day salt samples
+  final List<double> dailyEnergyHistory; // up to 31 daily energy totals (kWh)
+  final List<double> monthlyEnergyHistory; // up to 24 monthly energy totals (kWh)
+  final String? monthlyEnergyEndMonth; // YYYY-MM anchor for monthlyEnergyHistory
 
   const SpaSnapshot({
     required this.name,
@@ -67,6 +70,9 @@ class SpaSnapshot {
     this.heatingRate,
     this.tempHistory = const [],
     this.saltHistory = const [],
+    this.dailyEnergyHistory = const [],
+    this.monthlyEnergyHistory = const [],
+    this.monthlyEnergyEndMonth,
   });
 
   static double? _num(double v) => v.isNaN ? null : v;
@@ -138,13 +144,18 @@ class SpaSnapshot {
     final rateEntity = visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'heating_rate').firstOrNull;
     final heatingRate = rateEntity == null ? null : _num(c.states[rateEntity.key]?.number ?? double.nan);
 
-    List<double> historyFor(String id) {
+    HistorySeries seriesFor(String id) {
       final e = c.entities.values
           .where((x) => !x.disabledByDefault && x.kind == EntityKind.textSensor && x.objectId == id)
           .firstOrNull;
-      if (e == null) return const [];
-      return HistorySeries.parse(c.states[e.key]?.text).nonNullValues;
+      if (e == null) return HistorySeries.empty;
+      return HistorySeries.parse(c.states[e.key]?.text);
     }
+
+    final waterHist = seriesFor('history_water_temp');
+    final saltHist = seriesFor('history_salt');
+    final energyDailyHist = seriesFor('history_energy');
+    final energyMonthlyHist = seriesFor('history_energy_monthly');
 
     final lo = climate == null ? (fahrenheit ? 79.0 : 26.0) : disp(climate.minValue);
     final hi = climate == null || climate.maxValue <= climate.minValue ? disp(40) : disp(climate.maxValue);
@@ -173,8 +184,11 @@ class SpaSnapshot {
       readyEtaSeconds: readyEtaSeconds,
       readyEtaCalibrated: readyEtaCalibrated,
       heatingRate: heatingRate,
-      tempHistory: historyFor('history_water_temp'),
-      saltHistory: historyFor('history_salt'),
+      tempHistory: waterHist.nonNullValues,
+      saltHistory: saltHist.nonNullValues,
+      dailyEnergyHistory: energyDailyHist.nonNullValues,
+      monthlyEnergyHistory: energyMonthlyHist.nonNullValues,
+      monthlyEnergyEndMonth: energyMonthlyHist.endMonthKey,
     );
   }
 
@@ -210,6 +224,9 @@ class SpaSnapshot {
         'heatingRate': heatingRate,
         'tempHistory': tempHistory,
         'saltHistory': saltHistory,
+        'dailyEnergyHistory': dailyEnergyHistory,
+        'monthlyEnergyHistory': monthlyEnergyHistory,
+        'monthlyEnergyEndMonth': monthlyEnergyEndMonth,
       };
 
   factory SpaSnapshot.fromMap(Map<Object?, Object?> m) {
@@ -239,6 +256,9 @@ class SpaSnapshot {
       heatingRate: (m['heatingRate'] as num?)?.toDouble(),
       tempHistory: numList('tempHistory'),
       saltHistory: numList('saltHistory'),
+      dailyEnergyHistory: numList('dailyEnergyHistory'),
+      monthlyEnergyHistory: numList('monthlyEnergyHistory'),
+      monthlyEnergyEndMonth: m['monthlyEnergyEndMonth'] as String?,
     );
   }
 }

@@ -9,28 +9,49 @@ void main() {
       final s = HistorySeries.parse('6h:101.2,102.0,,103.5');
       expect(s.intervalLabel, '6h');
       expect(s.bucketHours, 6);
+      expect(s.endDate, isNull);
       expect(s.values, [101.2, 102.0, null, 103.5]);
       expect(s.nonNullValues, [101.2, 102.0, 103.5]);
       expect(s.min, 101.2);
       expect(s.max, 103.5);
       expect(s.latest, 103.5);
+      expect(s.sum, closeTo(306.7, 0.001));
       expect(s.spanLabel, '1d');
+      expect(s.labelForIndex(0), '-18h');
+      expect(s.labelForIndex(3), 'Now');
     });
 
-    test('parses 12h and 1d series and 56-point 14-day span', () {
-      final fiftySix = List.generate(56, (i) => '${100 + (i % 4)}').join(',');
-      final s6 = HistorySeries.parse('6h:$fiftySix');
-      expect(s6.values.length, 56);
-      expect(s6.spanLabel, '14d');
+    test('parses 1d@YYYY-MM-DD, slices thisMonthOnly, and labels dates', () {
+      // 10 days ending 2026-11-03 => Oct 25..Oct 31 (7 days) + Nov 1..Nov 3 (3 days)
+      final s = HistorySeries.parse('1d@2026-11-03:1,2,3,4,5,6,7,10,11,12');
+      expect(s.isDaily, isTrue);
+      expect(s.endDate, DateTime(2026, 11, 3));
+      expect(s.spanLabel, '10d');
+      expect(s.labelForIndex(0), 'Oct 25');
+      expect(s.labelForIndex(9), 'Nov 3');
 
-      final s12 = HistorySeries.parse('12h:100,101,102,103');
-      expect(s12.bucketHours, 12);
-      expect(s12.spanLabel, '2d');
+      final mtd = s.thisMonthOnly();
+      expect(mtd.values, [10.0, 11.0, 12.0]);
+      expect(mtd.sum, 33.0);
+      expect(mtd.labelForIndex(0), 'Nov 1');
+      expect(mtd.labelForIndex(2), 'Nov 3');
+    });
 
-      final sd = HistorySeries.parse('1d:4.12,5.30,3.80');
-      expect(sd.bucketHours, 24);
-      expect(sd.spanLabel, '3d');
-      expect(sd.latest, 3.80);
+    test('parses 1mo@YYYY-MM for 24 months, slices lastN(12), and labels months', () {
+      final twentyFour = List.generate(24, (i) => '${100 + i}').join(',');
+      final s24 = HistorySeries.parse('1mo@2026-11:$twentyFour');
+      expect(s24.isMonthly, isTrue);
+      expect(s24.values.length, 24);
+      expect(s24.spanLabel, '2yr');
+      expect(s24.endMonthKey, '2026-11');
+      expect(s24.labelForIndex(0), "Dec '24");
+      expect(s24.labelForIndex(23), "Nov '26");
+
+      final s12 = s24.lastN(12);
+      expect(s12.values.length, 12);
+      expect(s12.spanLabel, '1yr');
+      expect(s12.labelForIndex(0), 'Dec');
+      expect(s12.labelForIndex(11), 'Nov');
     });
 
     test('returns empty for blank, NA, or all-null payloads', () {
@@ -41,11 +62,12 @@ void main() {
     });
   });
 
-  group('MicrochartCard widget', () {
-    testWidgets('renders single-point line, 56-point line, and 14-day bars without overflow', (tester) async {
+  group('Microchart widgets', () {
+    testWidgets('renders single-series and switches tabs in TabbedMicrochartCard without overflow', (tester) async {
       final single = HistorySeries.parse('6h:102.4');
       final full = HistorySeries.parse('6h:${List.generate(56, (i) => (98 + (i % 6) * 0.5).toStringAsFixed(1)).join(',')}');
-      final bars = HistorySeries.parse('1d:${List.generate(14, (i) => (2.5 + (i % 5) * 0.4).toStringAsFixed(2)).join(',')}');
+      final daily = HistorySeries.parse('1d@2026-11-27:${List.generate(31, (i) => (4.0 + (i % 4)).toStringAsFixed(2)).join(',')}');
+      final monthly = HistorySeries.parse('1mo@2026-11:${List.generate(24, (i) => (110 + i * 2).toStringAsFixed(1)).join(',')}');
 
       await tester.pumpWidget(
         MaterialApp(
@@ -68,14 +90,20 @@ void main() {
                   series: full,
                   unit: 'W',
                 ),
-                MicrochartCard(
-                  title: 'Daily energy',
+                TabbedMicrochartCard(
+                  title: 'Energy consumption',
                   icon: Icons.bar_chart,
                   accent: Colors.cyan,
-                  series: bars,
                   unit: 'kWh',
-                  decimals: 2,
+                  decimals: 1,
                   style: MicrochartStyle.bars,
+                  showTotal: true,
+                  tabs: [
+                    MicrochartTab(label: 'Month', series: daily.thisMonthOnly(), spanOverride: 'MTD'),
+                    MicrochartTab(label: '31d', series: daily),
+                    MicrochartTab(label: '1yr', series: monthly.lastN(12)),
+                    MicrochartTab(label: '2yr', series: monthly),
+                  ],
                 ),
               ],
             ),
@@ -86,8 +114,12 @@ void main() {
       expect(find.text('Water temperature'), findsOneWidget);
       expect(find.text('102.4 °F'), findsWidgets);
       expect(find.text('Total power draw'), findsOneWidget);
-      expect(find.text('14d'), findsNWidgets(2));
-      expect(find.text('Daily energy'), findsOneWidget);
+      expect(find.text('Energy consumption'), findsOneWidget);
+      expect(find.text('MTD'), findsOneWidget);
+
+      await tester.tap(find.text('2yr'));
+      await tester.pump();
+      expect(find.text('2yr'), findsNWidgets(2)); // pill + span badge
     });
   });
 }
