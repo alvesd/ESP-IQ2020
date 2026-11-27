@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iq2020_mobile/api/cf_access.dart';
 import 'package:iq2020_mobile/api/esphome_client.dart';
 import 'package:iq2020_mobile/api/messages.dart';
+import 'package:iq2020_mobile/api/protobuf.dart';
 import 'package:iq2020_mobile/api/web_client_protocol.dart';
 import 'package:iq2020_mobile/device_store.dart';
 import 'package:iq2020_mobile/watch/spa_snapshot.dart';
@@ -431,6 +433,54 @@ void main() {
 
       sseDone.complete();
       client.dispose();
+    });
+  });
+
+  group('Local Noise CF auto-provisioning & AddDeviceSheet token visibility', () {
+    test('decodes ListEntitiesServicesResponse, ExecuteServiceRequest, and HomeassistantEvent', () {
+      final svcProto = (ProtoWriter()
+            ..string(1, 'fetch_remote_config')
+            ..fixed32(2, 0x12345678))
+          .toBytes();
+      final svc = ApiServiceInfo.fromProto(ProtoMessage.decode(svcProto));
+      expect(svc.name, 'fetch_remote_config');
+      expect(svc.key, 0x12345678);
+
+      final (reqId, reqBytes) = Requests.executeService(svc.key);
+      expect(reqId, MsgId.executeServiceRequest);
+      expect(ProtoMessage.decode(reqBytes).fixed32(1), 0x12345678);
+
+      List<int> kvEntry(String k, String v) => (ProtoWriter()
+            ..string(1, k)
+            ..string(2, v))
+          .toBytes();
+
+      final b = BytesBuilder();
+      void addEntry(String k, String v) {
+        final raw = kvEntry(k, v);
+        // field 2 wire type 2 => (2 << 3) | 2 = 0x12
+        b.addByte(0x12);
+        b.addByte(raw.length);
+        b.add(raw);
+      }
+
+      final head = (ProtoWriter()
+            ..string(1, 'esphome.iq2020_remote_config')
+            ..boolean(5, true))
+          .toBytes();
+      b.add(head);
+      addEntry('remote_url', 'https://spa.alves.us');
+      addEntry('cf_client_id', 'prov-id.access');
+      addEntry('cf_client_secret', 'prov-secret');
+
+      final ev = HomeassistantEvent.fromProto(ProtoMessage.decode(b.toBytes()));
+      expect(ev.isEvent, isTrue);
+      expect(ev.service, 'esphome.iq2020_remote_config');
+      expect(ev.data, {
+        'remote_url': 'https://spa.alves.us',
+        'cf_client_id': 'prov-id.access',
+        'cf_client_secret': 'prov-secret',
+      });
     });
   });
 }

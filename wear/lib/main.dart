@@ -199,6 +199,18 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
       cfAccessClientId: remote.clientId,
       cfAccessClientSecret: remote.clientSecret,
       clientInfo: 'IQ2020 Wear OS',
+      onRemoteConfigReceived: (cfg) {
+        if (cfg.remoteUrl == widget.device.remoteUrl &&
+            cfg.clientId == widget.device.cfAccessClientId &&
+            cfg.clientSecret == widget.device.cfAccessClientSecret) {
+          return;
+        }
+        unawaited(widget.store.upsert(widget.device.copyWith(
+          remoteUrl: cfg.remoteUrl,
+          cfAccessClientId: cfg.clientId,
+          cfAccessClientSecret: cfg.clientSecret,
+        )));
+      },
     );
   }();
   double? _pendingTarget;
