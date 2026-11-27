@@ -88,6 +88,9 @@ struct ContentView: View {
 
   private func etaInfo(_ s: SpaSnapshot) -> (readyAt: Date?, calibrated: Bool) {
     guard let current = s.current, current < s.heatUpTemp - 0.05 else { return (nil, false) }
+    if pendingTarget == nil, let sec = s.readyEtaSeconds, sec > 0 {
+      return (now.addingTimeInterval(Double(sec)), s.readyEtaCalibrated)
+    }
     let defaultRate = s.unit == "°F" ? 5.0 : 5.0 * 5.0 / 9.0
     let minRate = s.unit == "°F" ? 1.0 : 1.0 * 5.0 / 9.0
     let maxRate = s.unit == "°F" ? 15.0 : 15.0 * 5.0 / 9.0

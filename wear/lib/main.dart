@@ -319,6 +319,10 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
         ? _eta.estimate(currentTemp: current, targetTemp: snap.heatUpTemp, isFahrenheit: isFahrenheit, now: now)
         : null;
     final heatUpReached = heatUpActive && (eta?.reached ?? false);
+    final serverEtaSec = (_pendingTarget == null && heatUpActive && !heatUpReached) ? snap.readyEtaSeconds : null;
+    final useServerEta = serverEtaSec != null && serverEtaSec > 0;
+    final readyAt = useServerEta ? now.add(Duration(seconds: serverEtaSec)) : eta?.readyAt;
+    final etaCalibrated = useServerEta ? snap.readyEtaCalibrated : (eta?.calibrated ?? false);
     _syncEtaTimer(heatUpActive && !heatUpReached && !current.isNaN);
 
     final (heaterLabel, heaterColor) = switch (snap.heater) {
@@ -356,9 +360,9 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
           padding: EdgeInsets.zero,
         );
 
-    final etaTimeText = (eta?.readyAt == null)
+    final etaTimeText = readyAt == null
         ? '${fmt(snap.heatUpTemp)}${snap.unit}'
-        : MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(eta!.readyAt!));
+        : MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(readyAt));
 
     return ListView(
       padding: _roundInsets(context),
@@ -387,7 +391,7 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
               icon: heatUpReached ? Icons.check_circle : Icons.local_fire_department,
               title: heatUpReached
                   ? 'Ready'
-                  : (heatUpActive ? (eta!.calibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up'),
+                  : (heatUpActive ? (etaCalibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up'),
               subtitle: heatUpReached ? 'At ${fmt(snap.heatUpTemp)}${snap.unit}' : etaTimeText,
               accent: heatUpReached ? const Color(0xFF30A46C) : const Color(0xFFFF8A4C),
               active: heatUpActive,

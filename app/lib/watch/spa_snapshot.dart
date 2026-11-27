@@ -37,6 +37,9 @@ class SpaSnapshot {
   final String? saltZone; // 'Too low' .. 'Too high'
   final int? saltPower; // 1..10 production level
   final bool saltBoost;
+  final int? readyEtaSeconds; // ESP32-tracked remaining heat-up seconds
+  final bool readyEtaCalibrated;
+  final double? heatingRate; // °F/h (or °C/h) from ESP32
 
   const SpaSnapshot({
     required this.name,
@@ -56,6 +59,9 @@ class SpaSnapshot {
     this.saltZone,
     this.saltPower,
     this.saltBoost = false,
+    this.readyEtaSeconds,
+    this.readyEtaCalibrated = false,
+    this.heatingRate,
   });
 
   static double? _num(double v) => v.isNaN ? null : v;
@@ -108,11 +114,30 @@ class SpaSnapshot {
         .firstOrNull;
     final saltBoost = saltBoostEntity != null && (c.states[saltBoostEntity.key]?.boolValue ?? false);
 
+    double? presetFromEntity(String id) {
+      final e = visible.where((x) => x.kind == EntityKind.number && x.objectId == id).firstOrNull;
+      if (e == null) return null;
+      final v = _num(c.states[e.key]?.number ?? double.nan);
+      if (v == null) return null;
+      final entityF = e.unit.isNotEmpty ? e.unit == '°F' : fahrenheit;
+      if (entityF == fahrenheit) return v;
+      return fahrenheit ? (v * 9 / 5 + 32) : ((v - 32) * 5 / 9);
+    }
+
+    final remEntity = visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'ready_eta_seconds').firstOrNull;
+    final readyEtaSeconds = remEntity == null ? null : _num(c.states[remEntity.key]?.number ?? double.nan)?.round();
+    final calEntity = visible
+        .where((e) => e.kind == EntityKind.binarySensor && e.objectId == 'heating_rate_calibrated')
+        .firstOrNull;
+    final readyEtaCalibrated = calEntity != null && (c.states[calEntity.key]?.boolValue ?? false);
+    final rateEntity = visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'heating_rate').firstOrNull;
+    final heatingRate = rateEntity == null ? null : _num(c.states[rateEntity.key]?.number ?? double.nan);
+
     final lo = climate == null ? (fahrenheit ? 79.0 : 26.0) : disp(climate.minValue);
     final hi = climate == null || climate.maxValue <= climate.minValue ? disp(40) : disp(climate.maxValue);
     final step = fahrenheit ? 1.0 : ((climate == null || climate.step <= 0) ? 0.5 : climate.step);
     final safeHi = hi > lo ? hi : lo + step;
-    double snapPreset(double celsius) => ((disp(celsius) / step).round() * step).clamp(lo, safeHi).toDouble();
+    double snapDisp(double v) => ((v / step).round() * step).clamp(lo, safeHi).toDouble();
 
     return SpaSnapshot(
       name: name,
@@ -124,14 +149,17 @@ class SpaSnapshot {
       min: lo,
       max: safeHi,
       step: step,
-      heatUpTemp: snapPreset(heatUpTempC),
-      vacationTemp: snapPreset(vacationTempC),
+      heatUpTemp: snapDisp(presetFromEntity('heat_up_temperature') ?? disp(heatUpTempC)),
+      vacationTemp: snapDisp(presetFromEntity('vacation_temperature') ?? disp(vacationTempC)),
       heater: heater,
       toggles: toggles,
       salt: salt,
       saltZone: salt == null ? null : ui.saltZone(salt)?.$1,
       saltPower: saltPowerNum?.round(),
       saltBoost: saltBoost,
+      readyEtaSeconds: readyEtaSeconds,
+      readyEtaCalibrated: readyEtaCalibrated,
+      heatingRate: heatingRate,
     );
   }
 
@@ -162,6 +190,9 @@ class SpaSnapshot {
         'saltZone': saltZone,
         'saltPower': saltPower,
         'saltBoost': saltBoost,
+        'readyEtaSeconds': readyEtaSeconds,
+        'readyEtaCalibrated': readyEtaCalibrated,
+        'heatingRate': heatingRate,
       };
 
   factory SpaSnapshot.fromMap(Map<Object?, Object?> m) {
@@ -184,6 +215,9 @@ class SpaSnapshot {
       saltZone: m['saltZone'] as String?,
       saltPower: (m['saltPower'] as num?)?.toInt(),
       saltBoost: m['saltBoost'] as bool? ?? false,
+      readyEtaSeconds: (m['readyEtaSeconds'] as num?)?.toInt(),
+      readyEtaCalibrated: m['readyEtaCalibrated'] as bool? ?? false,
+      heatingRate: (m['heatingRate'] as num?)?.toDouble(),
     );
   }
 }
