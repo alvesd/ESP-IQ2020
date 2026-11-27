@@ -257,46 +257,64 @@ class _SpaScreenState extends State<SpaScreen> {
     );
   }
 
-  List<Widget> _comfortPage(EspHomeClient c, _EntityGroups g) => [
-        for (final e in g.climates)
-          _ClimateCard(
-            client: c,
-            info: e,
-            run: _run,
-            logoLight: g.logoLight,
-            saltLevel: g.saltLevelSensor,
-            saltPower: g.saltPowerNumber,
-            saltBoost: g.saltBoostSwitch,
-            onTapSalt: g.hasSalt ? () => setState(() => _tab = 'Salt') : null,
-            heatUpTempC: _device.heatUpTempC,
-            vacationTempC: _device.vacationTempC,
+  List<Widget> _comfortPage(EspHomeClient c, _EntityGroups g) {
+    final f = c.entities.values.any((e) => e.kind == EntityKind.sensor && e.unit == '°F');
+    final heatUpC = _presetTempC(g.heatUpTempNumber, _device.heatUpTempC, c, f);
+    final vacationC = _presetTempC(g.vacationTempNumber, _device.vacationTempC, c, f);
+    return [
+      for (final e in g.climates)
+        _ClimateCard(
+          client: c,
+          info: e,
+          run: _run,
+          logoLight: g.logoLight,
+          saltLevel: g.saltLevelSensor,
+          saltPower: g.saltPowerNumber,
+          saltBoost: g.saltBoostSwitch,
+          readyEtaSeconds: g.readyEtaSecondsSensor,
+          heatingRateCalibrated: g.heatingRateCalibratedSensor,
+          heatingProgress: g.heatingProgressSensor,
+          onTapSalt: g.hasSalt ? () => setState(() => _tab = 'Salt') : null,
+          heatUpTempC: heatUpC,
+          vacationTempC: vacationC,
+        ),
+      if (g.fans.isNotEmpty || g.lights.isNotEmpty) ...[
+        _Section(g.fans.isNotEmpty && g.lights.isNotEmpty ? 'Jets & Lights' : (g.fans.isNotEmpty ? 'Jets' : 'Lights')),
+        _TileGrid(children: [
+          for (final e in g.fans) _FanTile(client: c, info: e, run: _run),
+          for (final e in g.lights) _LightTile(client: c, info: e, run: _run),
+        ]),
+      ],
+      // Salt boost and production level lead Spa settings (they also stay on the Salt tab).
+      if (g.switches.isNotEmpty || g.saltControls.isNotEmpty) ...[
+        const _Section('Spa settings'),
+        for (final e in g.saltAdjustments)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: e.kind == EntityKind.number
+                ? _NumberRow(client: c, info: e, run: _run, tile: true)
+                : Card(margin: EdgeInsets.zero, child: _GenericRow(client: c, info: e, run: _run)),
           ),
-        if (g.fans.isNotEmpty || g.lights.isNotEmpty) ...[
-          _Section(g.fans.isNotEmpty && g.lights.isNotEmpty ? 'Jets & Lights' : (g.fans.isNotEmpty ? 'Jets' : 'Lights')),
-          _TileGrid(children: [
-            for (final e in g.fans) _FanTile(client: c, info: e, run: _run),
-            for (final e in g.lights) _LightTile(client: c, info: e, run: _run),
-          ]),
-        ],
-        // Salt boost and production level lead Spa settings (they also stay on the Salt tab).
-        if (g.switches.isNotEmpty || g.saltControls.isNotEmpty) ...[
-          const _Section('Spa settings'),
-          for (final e in g.saltAdjustments)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: e.kind == EntityKind.number
-                  ? _NumberRow(client: c, info: e, run: _run, tile: true)
-                  : Card(margin: EdgeInsets.zero, child: _GenericRow(client: c, info: e, run: _run)),
-            ),
-          _TileGrid(children: [
-            for (final e in [...g.saltSwitches, ...g.switches]) _ToggleTile(client: c, info: e, run: _run),
-          ]),
-        ],
-        if (g.comfortSensors.isNotEmpty) ...[
-          const _Section('Water'),
-          _SensorGrid(client: c, sensors: g.comfortSensors),
-        ],
-      ];
+        _TileGrid(children: [
+          for (final e in [...g.saltSwitches, ...g.switches]) _ToggleTile(client: c, info: e, run: _run),
+        ]),
+      ],
+      if (g.comfortSensors.isNotEmpty) ...[
+        const _Section('Water'),
+        _SensorGrid(client: c, sensors: g.comfortSensors),
+      ],
+    ];
+  }
+
+  /// Resolves a preset temperature in °C, preferring the live ESP32 number entity (shared across
+  /// all users and devices) and falling back to the device's local [fallbackC].
+  double _presetTempC(EntityInfo? entity, double fallbackC, EspHomeClient c, bool spaFahrenheit) {
+    if (entity == null) return fallbackC;
+    final val = c.states[entity.key]?.number ?? double.nan;
+    if (val.isNaN) return fallbackC;
+    final entityF = entity.unit.isNotEmpty ? entity.unit == '°F' : spaFahrenheit;
+    return entityF ? (val - 32) * 5 / 9 : val;
+  }
 
   Widget _cardColumn(List<Widget> children) => Card(child: Column(children: children));
 
@@ -345,8 +363,27 @@ class _SpaScreenState extends State<SpaScreen> {
     final decimals = (!f && stepDisplay < 1) ? 1 : 0;
     double snapDisp(double v) => ((v / stepDisplay).round() * stepDisplay).clamp(minDisp, maxDisp).toDouble();
 
-    final heatUpDisp = snapDisp(toDisplay(_device.heatUpTempC));
-    final vacationDisp = snapDisp(toDisplay(_device.vacationTempC));
+    final heatUpC = _presetTempC(g.heatUpTempNumber, _device.heatUpTempC, c, f);
+    final vacationC = _presetTempC(g.vacationTempNumber, _device.vacationTempC, c, f);
+    final heatUpDisp = snapDisp(toDisplay(heatUpC));
+    final vacationDisp = snapDisp(toDisplay(vacationC));
+    final connected = c.status == ConnectionStatus.connected;
+
+    void setPreset(EntityInfo? entity, double nextDisp, bool isHeatUp) {
+      final nextC = toCelsius(nextDisp);
+      if (entity != null) {
+        final entityF = entity.unit.isNotEmpty ? entity.unit == '°F' : f;
+        final entityVal = entityF ? (nextC * 9 / 5 + 32) : nextC;
+        _run(() => c.setNumber(entity.key, entityVal.roundToDouble()));
+      }
+      unawaited(_updatePresetTemp(
+        heatUpTempC: isHeatUp ? nextC : null,
+        vacationTempC: isHeatUp ? null : nextC,
+      ));
+    }
+
+    final heatEnabled = g.heatUpTempNumber == null || connected;
+    final vacEnabled = g.vacationTempNumber == null || connected;
 
     return [
       const _Section('Temperature presets'),
@@ -355,21 +392,23 @@ class _SpaScreenState extends State<SpaScreen> {
           icon: Icons.local_fire_department,
           accent: _heatColor,
           title: 'Heat Up temperature',
+          subtitle: g.heatUpTempNumber != null ? 'Synced on hot tub' : 'Saved on this device',
           valueText: '${_fmt(heatUpDisp, decimals)}$unit',
-          canDecrease: heatUpDisp > minDisp + stepDisplay * 0.1,
-          canIncrease: heatUpDisp < maxDisp - stepDisplay * 0.1,
-          onDecrease: () => unawaited(_updatePresetTemp(heatUpTempC: toCelsius(snapDisp(heatUpDisp - stepDisplay)))),
-          onIncrease: () => unawaited(_updatePresetTemp(heatUpTempC: toCelsius(snapDisp(heatUpDisp + stepDisplay)))),
+          canDecrease: heatEnabled && heatUpDisp > minDisp + stepDisplay * 0.1,
+          canIncrease: heatEnabled && heatUpDisp < maxDisp - stepDisplay * 0.1,
+          onDecrease: () => setPreset(g.heatUpTempNumber, snapDisp(heatUpDisp - stepDisplay), true),
+          onIncrease: () => setPreset(g.heatUpTempNumber, snapDisp(heatUpDisp + stepDisplay), true),
         ),
         _PresetTempRow(
           icon: Icons.flight_takeoff,
           accent: _jetsColor,
           title: 'Vacation temperature',
+          subtitle: g.vacationTempNumber != null ? 'Synced on hot tub' : 'Saved on this device',
           valueText: '${_fmt(vacationDisp, decimals)}$unit',
-          canDecrease: vacationDisp > minDisp + stepDisplay * 0.1,
-          canIncrease: vacationDisp < maxDisp - stepDisplay * 0.1,
-          onDecrease: () => unawaited(_updatePresetTemp(vacationTempC: toCelsius(snapDisp(vacationDisp - stepDisplay)))),
-          onIncrease: () => unawaited(_updatePresetTemp(vacationTempC: toCelsius(snapDisp(vacationDisp + stepDisplay)))),
+          canDecrease: vacEnabled && vacationDisp > minDisp + stepDisplay * 0.1,
+          canIncrease: vacEnabled && vacationDisp < maxDisp - stepDisplay * 0.1,
+          onDecrease: () => setPreset(g.vacationTempNumber, snapDisp(vacationDisp - stepDisplay), false),
+          onIncrease: () => setPreset(g.vacationTempNumber, snapDisp(vacationDisp + stepDisplay), false),
         ),
       ]),
       // On/off spa settings live on the Comfort tab; only adjustable values remain here.
@@ -416,6 +455,8 @@ class _EntityGroups {
   late final List<EntityInfo> climates, fans, lights, switches, selects, numbers, status, buttons, config;
   late final List<EntityInfo> comfortSensors, powerSensors, usageSensors;
   late final EntityInfo? logoLight;
+  late final EntityInfo? heatUpTempNumber, vacationTempNumber;
+  late final EntityInfo? readyEtaSecondsSensor, heatingRateSensor, heatingProgressSensor, heatingRateCalibratedSensor, readyTimeTextSensor;
   // Freshwater / ACE salt system: everything with "salt" in its id gets its own tab.
   late final List<EntityInfo> saltSensors, saltStatus, saltControls, saltButtons;
   List<EntityInfo> get saltSwitches => saltControls.where((e) => e.kind == EntityKind.switch_).toList();
@@ -443,6 +484,20 @@ class _EntityGroups {
     saltButtons = salt({EntityKind.button});
 
     final visible = all.where((e) => !isSalt(e));
+    heatUpTempNumber =
+        visible.where((e) => e.kind == EntityKind.number && e.objectId == 'heat_up_temperature').firstOrNull;
+    vacationTempNumber =
+        visible.where((e) => e.kind == EntityKind.number && e.objectId == 'vacation_temperature').firstOrNull;
+    readyEtaSecondsSensor =
+        visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'ready_eta_seconds').firstOrNull;
+    heatingRateSensor = visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'heating_rate').firstOrNull;
+    heatingProgressSensor =
+        visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'heating_progress').firstOrNull;
+    heatingRateCalibratedSensor =
+        visible.where((e) => e.kind == EntityKind.binarySensor && e.objectId == 'heating_rate_calibrated').firstOrNull;
+    readyTimeTextSensor =
+        visible.where((e) => e.kind == EntityKind.textSensor && e.objectId == 'ready_time').firstOrNull;
+
     final logoCandidates =
         visible.where((e) => e.objectId.contains('logo_light') && !e.objectId.contains('raw')).toList();
     logoLight = logoCandidates.where((e) => e.kind == EntityKind.textSensor).firstOrNull ??
@@ -458,10 +513,17 @@ class _EntityGroups {
     lights = allSwitches.where(isLight).toList();
     switches = allSwitches.where((e) => !isLight(e)).toList();
     selects = kind(EntityKind.select);
-    numbers = kind(EntityKind.number);
-    status = [...kind(EntityKind.binarySensor), ...kind(EntityKind.textSensor)];
+    numbers = kind(EntityKind.number)
+        .where((e) => e != heatUpTempNumber && e != vacationTempNumber)
+        .toList();
+    status = [
+      ...kind(EntityKind.binarySensor),
+      ...kind(EntityKind.textSensor).where((e) => e != readyTimeTextSensor && e != logoLight),
+    ];
     buttons = kind(EntityKind.button);
-    config = [for (final k in EntityKind.values) ...kind(k, main: false)];
+    config = [for (final k in EntityKind.values) ...kind(k, main: false)]
+        .where((e) => e != heatUpTempNumber && e != vacationTempNumber)
+        .toList();
 
     powerSensors = [];
     usageSensors = [];
@@ -890,6 +952,9 @@ class _ClimateCard extends StatefulWidget {
   final EntityInfo? saltLevel;
   final EntityInfo? saltPower;
   final EntityInfo? saltBoost;
+  final EntityInfo? readyEtaSeconds;
+  final EntityInfo? heatingRateCalibrated;
+  final EntityInfo? heatingProgress;
   final VoidCallback? onTapSalt;
   final double heatUpTempC;
   final double vacationTempC;
@@ -901,6 +966,9 @@ class _ClimateCard extends StatefulWidget {
     this.saltLevel,
     this.saltPower,
     this.saltBoost,
+    this.readyEtaSeconds,
+    this.heatingRateCalibrated,
+    this.heatingProgress,
     this.onTapSalt,
     this.heatUpTempC = SavedDevice.defaultHeatUpTempC,
     this.vacationTempC = SavedDevice.defaultVacationTempC,
@@ -1120,7 +1188,20 @@ class _ClimateCardState extends State<_ClimateCard> {
         ? _eta.estimate(currentTemp: current, targetTemp: heatUpTarget, isFahrenheit: f, now: now)
         : null;
     final heatUpReached = heatUpActive && (eta?.reached ?? false);
-    final heatUpHeating = heatUpActive && !heatUpReached && (eta?.readyAt != null);
+    final serverEtaSec = (_pendingTarget == null && heatUpActive && !heatUpReached && widget.readyEtaSeconds != null)
+        ? (widget.client.states[widget.readyEtaSeconds!.key]?.number ?? double.nan)
+        : double.nan;
+    final useServerEta = !serverEtaSec.isNaN && serverEtaSec > 0;
+    final readyAt = useServerEta ? now.add(Duration(seconds: serverEtaSec.round())) : eta?.readyAt;
+    final etaCalibrated = useServerEta
+        ? (widget.heatingRateCalibrated != null &&
+            (widget.client.states[widget.heatingRateCalibrated!.key]?.boolValue ?? false))
+        : (eta?.calibrated ?? false);
+    final serverPct = useServerEta && widget.heatingProgress != null
+        ? (widget.client.states[widget.heatingProgress!.key]?.number ?? double.nan)
+        : double.nan;
+    final etaProgress = !serverPct.isNaN ? (serverPct / 100.0).clamp(0.08, 0.96) : (eta?.progress ?? 0.08);
+    final heatUpHeating = heatUpActive && !heatUpReached && readyAt != null;
     _syncEtaTimer(heatUpHeating);
 
     Widget roundButton(IconData icon, VoidCallback? onPressed) => Material(
@@ -1138,11 +1219,11 @@ class _ClimateCardState extends State<_ClimateCard> {
 
     final heatUpTitle = heatUpReached
         ? 'Ready'
-        : (heatUpHeating ? (eta!.calibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up');
+        : (heatUpHeating ? (etaCalibrated ? 'Ready by' : 'Est. Ready') : 'Heat Up');
     final heatUpSub = heatUpReached
         ? 'At ${_fmt(heatUpTarget, decimals)}$unit'
         : (heatUpHeating
-            ? MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(eta!.readyAt!))
+            ? MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(readyAt))
             : '${_fmt(heatUpTarget, decimals)}$unit');
 
     return AnimatedContainer(
@@ -1258,7 +1339,7 @@ class _ClimateCardState extends State<_ClimateCard> {
                   subtitle: heatUpSub,
                   active: heatUpActive,
                   activeAccent: heatUpReached ? const Color(0xFF17874B) : const Color(0xFFC93E24),
-                  progress: heatUpHeating ? eta!.progress : null,
+                  progress: heatUpHeating ? etaProgress : null,
                   onTap: enabled
                       ? () {
                           _eta.start(currentTemp: current, targetTemp: heatUpTarget, now: DateTime.now());
@@ -1941,6 +2022,7 @@ class _PresetTempRow extends StatelessWidget {
   final IconData icon;
   final Color accent;
   final String title;
+  final String subtitle;
   final String valueText;
   final bool canDecrease;
   final bool canIncrease;
@@ -1951,6 +2033,7 @@ class _PresetTempRow extends StatelessWidget {
     required this.icon,
     required this.accent,
     required this.title,
+    required this.subtitle,
     required this.valueText,
     required this.canDecrease,
     required this.canIncrease,
@@ -1964,6 +2047,7 @@ class _PresetTempRow extends StatelessWidget {
     return ListTile(
       leading: _IconBadge(icon: icon, color: accent, size: 18),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
           visualDensity: VisualDensity.compact,

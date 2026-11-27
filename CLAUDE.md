@@ -85,6 +85,15 @@ Talking to a real device from the command line (independent of the Dart client):
 - The ESP32 allows at most 5 API connections. Each app relaunch leaves a stale connection until the ESP32's keepalive drops it, so rapid relaunches during testing show "Connection reset by peer" until the slots free up.
 - `device_store.dart`: saved devices and their API keys are kept in `flutter_secure_storage`. Discovery uses `bonsoir` for `_esphomelib._tcp`; iOS needs `NSLocalNetworkUsageDescription` and `NSBonjourServices`, which `bootstrap.sh` adds.
 
+## Cross-platform & web parity
+
+Whenever a user-facing feature, control, preset, or status indicator is added or changed, update **all** applicable surfaces together so no device or UI falls behind:
+1. **ESP32 firmware** (`firmware/hotspring.yaml`): keep shared device-level state and calculations on the ESP32 when possible (persistent global preset temperatures, heating rate-of-rise / Ready ETA, etc.) so every connected client sees the same numbers.
+2. **Phone app — iOS & Android** (`app/lib/ui/`): update the Flutter mobile UI.
+3. **Wear OS** (`wear/lib/main.dart`) + shared snapshot (`app/lib/watch/spa_snapshot.dart`).
+4. **Apple Watch** (`app/ios/IQ2020Watch/` + `app/lib/watch/watch_relay.dart`).
+5. **Web UI**: any ESP32-hosted web UI / web frontend once present in the repo.
+
 ## Watch apps
 
 Both show one screen: water and target temperature (−/+, debounced like the phone), heater state, jets and lights toggles, salt zone. The data model is `app/lib/watch/spa_snapshot.dart` (`SpaSnapshot.fromClient`, `applyWatchCommand`), shared by both.

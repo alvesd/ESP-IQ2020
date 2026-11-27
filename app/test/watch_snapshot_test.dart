@@ -61,6 +61,30 @@ void main() {
     expect(back.toMap(), s.toMap());
   });
 
+  test('snapshot reads global presets and ESP32 Ready ETA telemetry when exposed', () {
+    final c = fakeSpa();
+    c.entities[9] = EntityInfo(kind: EntityKind.number, key: 9, objectId: 'heat_up_temperature', name: 'Heat Up Temperature', unit: '°F');
+    c.states[9] = const EntityState(key: 9, number: 103);
+    c.entities[10] = EntityInfo(kind: EntityKind.number, key: 10, objectId: 'vacation_temperature', name: 'Vacation Temperature', unit: '°F');
+    c.states[10] = const EntityState(key: 10, number: 82);
+    c.entities[11] = EntityInfo(kind: EntityKind.sensor, key: 11, objectId: 'ready_eta_seconds', name: 'Ready ETA Seconds', unit: 's');
+    c.states[11] = const EntityState(key: 11, number: 1800);
+    c.entities[12] = EntityInfo(kind: EntityKind.binarySensor, key: 12, objectId: 'heating_rate_calibrated', name: 'Heating Rate Calibrated');
+    c.states[12] = const EntityState(key: 12, boolValue: true);
+    c.entities[13] = EntityInfo(kind: EntityKind.sensor, key: 13, objectId: 'heating_rate', name: 'Heating Rate', unit: '°F/h');
+    c.states[13] = const EntityState(key: 13, number: 6.5);
+
+    final s = SpaSnapshot.fromClient(c, name: 'hotspring');
+    expect(s.heatUpTemp.round(), 103);
+    expect(s.vacationTemp.round(), 82);
+    expect(s.readyEtaSeconds, 1800);
+    expect(s.readyEtaCalibrated, isTrue);
+    expect(s.heatingRate, closeTo(6.5, 0.01));
+
+    final roundTrip = SpaSnapshot.fromMap(s.toMap());
+    expect(roundTrip.toMap(), s.toMap());
+  });
+
   test('missing readings become null, not NaN', () {
     final c = EspHomeClient(host: 'test');
     final s = SpaSnapshot.fromClient(c, name: 'x');
