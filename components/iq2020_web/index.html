@@ -236,6 +236,7 @@ function iconSvg(kind, size=18) {
     case "lock": return `<svg ${s}><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
     case "clean": return `<svg ${s}><path d="M3 22v-3a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v3"/><path d="M12 15V3"/></svg>`;
     case "sun": return `<svg ${s}><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+    case "restart": return `<svg ${s}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>`;
     default: return `<svg ${s}><path d="M12 20v-6m0-4V4m-6 16v-2m0-4V4m12 16v-8m0-4V4"/></svg>`;
   }
 }
@@ -250,6 +251,7 @@ function entityIcon(e) {
   if (s.includes("power") || ["W","A","V","kWh"].includes(e.uom)) return "bolt";
   if (s.includes("temp") || e.uom === "°F" || e.uom === "°C") return "thermo";
   if (s.includes("runtime") || DUR[e.uom]) return "timer";
+  if (s.includes("restart") || s.includes("reboot")) return "restart";
   return "tune";
 }
 function accentFor(e) {
@@ -330,8 +332,10 @@ function arc(cx, cy, r, a0, a1) {
 async function post(url) {
   try { await fetch(url, { method: "POST" }); } catch (e) {}
 }
-function confirmRun(title, fn) {
+function confirmRun(title, fn, desc = "Run this action on the hot tub?", okLabel = "Confirm") {
   document.getElementById("modalTitle").textContent = `${title}?`;
+  document.getElementById("modalDesc").textContent = desc;
+  document.getElementById("modalOk").textContent = okLabel;
   document.getElementById("modalBg").classList.add("open");
   document.getElementById("modalOk").onclick = () => { document.getElementById("modalBg").classList.remove("open"); fn(); };
 }
@@ -351,6 +355,12 @@ function groupEntities() {
   const saltButtons = all.filter(e => isSalt(e) && e.domain === "button").sort(byName);
 
   const vis = all.filter(e => !isSalt(e) && !isHistory(e));
+  const restartBtn = vis.find(e => e.domain === "button" && (
+    e.device_class === "restart" ||
+    oid(e) === "esp_restart" ||
+    oid(e).includes("restart") ||
+    oid(e).includes("reboot")
+  ));
   const heatUpNum = vis.find(e => e.domain === "number" && oid(e) === "heat_up_temperature");
   const vacNum = vis.find(e => e.domain === "number" && oid(e) === "vacation_temperature");
   const etaSec = vis.find(e => e.domain === "sensor" && oid(e) === "ready_eta_seconds");
@@ -369,14 +379,15 @@ function groupEntities() {
     else if (isUsage(e)) usage.push(e);
     else comfort.push(e);
   }
-  const config = [...vis.filter(e => (e.entity_category || 0) !== 0 && e !== heatUpNum && e !== vacNum)].sort(byName);
+  const config = [...vis.filter(e => (e.entity_category || 0) !== 0 && e !== heatUpNum && e !== vacNum && e !== restartBtn)].sort(byName);
   return {
     climates: kind("climate"), fans: kind("fan"),
     lights: sw.filter(isLight), switches: sw.filter(e => !isLight(e)),
     selects: kind("select"),
     numbers: kind("number").filter(e => e !== heatUpNum && e !== vacNum),
     status: [...kind("binary_sensor"), ...kind("text_sensor").filter(e => e !== logoLight && e !== readyTime)],
-    buttons: kind("button"),
+    buttons: kind("button").filter(e => e !== restartBtn),
+    restartBtn,
     config, comfort, power, usage, logoLight, heatUpNum, vacNum, etaSec, etaCal, etaProg, readyTime,
     histWater: hist("history_water_temp"), histWaterD: hist("history_water_temp_daily"), histWaterM: hist("history_water_temp_monthly"),
     histPower: hist("history_power"), histPowerD: hist("history_power_daily"), histPowerM: hist("history_power_monthly"),
@@ -1005,6 +1016,14 @@ function render() {
       if (g.status.length || g.buttons.length) {
         html += `<div class="sec">Status & maintenance</div><div class="card">${g.status.map(renderStatusRow).join("")}${g.buttons.map(renderGenericRow).join("")}</div>`;
       }
+      if (g.restartBtn) {
+        const dis = connState !== "online" ? "disabled" : "";
+        html += `<div class="sec">System</div><div class="card"><div class="row">
+          <span class="ico-badge" style="background:#F0643C24;color:#F0643C;width:32px;height:32px">${iconSvg("restart",16)}</span>
+          <div class="row-main"><div class="row-t">Reboot system</div><div class="row-s">Restart the ESP32 controller (history is saved)</div></div>
+          <button type="button" class="btn-out" style="border-color:rgba(240,100,60,.65);color:#F0643C" data-reboot="${esc(g.restartBtn.id)}" ${dis}>Reboot</button>
+        </div></div>`;
+      }
       if (g.config.length || g.histHeap) {
         html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.histHeap ? `<div style="padding:0 12px 10px">${renderMicrochart(g.histHeap, { title: "ESP32 free heap", icon: "tune", accent: "#4FE3EA", unit: "KB" })}</div>` : ""}${g.config.map(renderGenericRow).join("")}</details>`;
       }
@@ -1123,6 +1142,15 @@ function bindHandlers(g) {
   document.querySelectorAll("[data-btn]").forEach(b => b.onclick = () => {
     const e = entities[b.dataset.btn];
     if (e) confirmRun(e.name, () => post(`/button/${encName(e)}/press`));
+  });
+  document.querySelectorAll("[data-reboot]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.reboot];
+    if (e) confirmRun(
+      "Reboot system",
+      () => post(`/button/${encName(e)}/press`),
+      "The ESP32 controller will restart and reconnect in a few seconds. Hot tub settings and history are preserved.",
+      "Reboot"
+    );
   });
   document.querySelectorAll("[data-pdec]").forEach(b => b.onclick = () => {
     const e = entities[b.dataset.pdec];

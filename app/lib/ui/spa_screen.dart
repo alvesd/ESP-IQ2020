@@ -636,6 +636,20 @@ class _SpaScreenState extends State<SpaScreen> {
           onTap: _editConnection,
         ),
       ),
+      if (g.restartButton != null) ...[
+        const _Section('System'),
+        _cardColumn([
+          RebootSystemRow(
+            enabled: connected,
+            onReboot: () {
+              _run(() => c.pressButton(g.restartButton!.key));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Rebooting ESP32 controller…')),
+              );
+            },
+          ),
+        ]),
+      ],
       if (g.config.isNotEmpty || g.historyFreeHeap != null || c.deviceInfo != null)
         Card(
           margin: const EdgeInsets.only(top: 16),
@@ -730,12 +744,20 @@ class _SettingsSubTabBar extends StatelessWidget {
   }
 }
 
+bool isRestartButtonEntity(EntityInfo e) =>
+    e.kind == EntityKind.button &&
+    (e.deviceClass == 'restart' ||
+        e.objectId == 'esp_restart' ||
+        e.objectId.contains('restart') ||
+        e.objectId.contains('reboot'));
+
 /// Splits the device's entities into the tabs. Pure function of the entity list, so it adapts
 /// to whatever the spa's firmware exposes.
 class _EntityGroups {
   late final List<EntityInfo> climates, fans, lights, switches, selects, numbers, status, buttons, config;
   late final List<EntityInfo> comfortSensors, powerSensors, usageSensors;
   late final EntityInfo? logoLight;
+  late final EntityInfo? restartButton;
   late final EntityInfo? heatUpTempNumber, vacationTempNumber;
   late final EntityInfo? readyEtaSecondsSensor, heatingRateSensor, heatingProgressSensor, heatingRateCalibratedSensor, readyTimeTextSensor;
   late final EntityInfo? historyWaterTemp,
@@ -797,6 +819,7 @@ class _EntityGroups {
     saltButtons = salt({EntityKind.button});
 
     final visible = all.where((e) => !isSalt(e) && !isHistory(e));
+    restartButton = visible.where(isRestartButtonEntity).firstOrNull;
     heatUpTempNumber =
         visible.where((e) => e.kind == EntityKind.number && e.objectId == 'heat_up_temperature').firstOrNull;
     vacationTempNumber =
@@ -833,9 +856,9 @@ class _EntityGroups {
       ...kind(EntityKind.binarySensor),
       ...kind(EntityKind.textSensor).where((e) => e != readyTimeTextSensor && e != logoLight),
     ];
-    buttons = kind(EntityKind.button);
+    buttons = kind(EntityKind.button).where((e) => e != restartButton).toList();
     config = [for (final k in EntityKind.values) ...kind(k, main: false)]
-        .where((e) => e != heatUpTempNumber && e != vacationTempNumber)
+        .where((e) => e != heatUpTempNumber && e != vacationTempNumber && e != restartButton)
         .toList();
 
     powerSensors = [];
@@ -1090,6 +1113,7 @@ IconData _iconFor(EntityInfo e) {
   if (id.contains('temp') || e.unit == '°F' || e.unit == '°C') return Icons.thermostat;
   if (id.contains('runtime') || _durationSeconds.containsKey(e.unit)) return Icons.timer_outlined;
   if (id.contains('counter')) return Icons.restart_alt;
+  if (id.contains('restart') || id.contains('reboot')) return Icons.restart_alt;
   if (id.contains('wifi')) return Icons.wifi;
   return Icons.tune;
 }
@@ -2317,6 +2341,52 @@ class _ButtonRow extends StatelessWidget {
                   if (ok == true) run(() => client.pressButton(info.key));
                 },
           child: const Text('Run'),
+        ),
+      );
+}
+
+class RebootSystemRow extends StatelessWidget {
+  final bool enabled;
+  final VoidCallback onReboot;
+  const RebootSystemRow({super.key, required this.enabled, required this.onReboot});
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+        leading: const _IconBadge(icon: Icons.restart_alt, color: _heatColor, size: 18),
+        title: const Text('Reboot system'),
+        subtitle: const Text('Restart the ESP32 controller (history is saved)'),
+        trailing: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _heatColor,
+            side: BorderSide(color: _heatColor.withValues(alpha: 0.7)),
+          ),
+          onPressed: !enabled
+              ? null
+              : () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Reboot system?'),
+                      content: const Text(
+                        'The ESP32 controller will restart and reconnect in a few seconds. '
+                        'Hot tub settings and history are preserved.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: _heatColor),
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: const Text('Reboot'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true) onReboot();
+                },
+          child: const Text('Reboot'),
         ),
       );
 }
