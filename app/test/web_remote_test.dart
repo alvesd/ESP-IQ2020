@@ -161,36 +161,36 @@ void main() {
   });
 
   group('buildWebCommandUri', () {
-    final base = Uri.parse('https://spa.alves.us');
+    final base = Uri.parse('https://spa.example.com');
 
     test('builds REST URIs for all 7 command entity kinds', () {
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.switch_, key: 1, objectId: 'lights', name: 'Lights'), 'turn_on').toString(),
-        'https://spa.alves.us/switch/Lights/turn_on',
+        'https://spa.example.com/switch/Lights/turn_on',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.fan, key: 2, objectId: 'jets_1', name: 'Jets 1'), 'turn_on', {'speed_level': '2'}).toString(),
-        'https://spa.alves.us/fan/Jets%201/turn_on?speed_level=2',
+        'https://spa.example.com/fan/Jets%201/turn_on?speed_level=2',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.climate, key: 3, objectId: 'temperature', name: 'Temperature'), 'set', {'target_temperature': '38.89'}).toString(),
-        'https://spa.alves.us/climate/Temperature/set?target_temperature=38.89',
+        'https://spa.example.com/climate/Temperature/set?target_temperature=38.89',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.number, key: 4, objectId: 'salt_system_power', name: 'Salt System Power'), 'set', {'value': '5'}).toString(),
-        'https://spa.alves.us/number/Salt%20System%20Power/set?value=5',
+        'https://spa.example.com/number/Salt%20System%20Power/set?value=5',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.select, key: 5, objectId: 'light_color', name: 'Light Color'), 'set', {'option': 'Cyan'}).toString(),
-        'https://spa.alves.us/select/Light%20Color/set?option=Cyan',
+        'https://spa.example.com/select/Light%20Color/set?option=Cyan',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.button, key: 6, objectId: 'salt_test', name: 'Salt Test'), 'press').toString(),
-        'https://spa.alves.us/button/Salt%20Test/press',
+        'https://spa.example.com/button/Salt%20Test/press',
       );
       expect(
         buildWebCommandUri(base, EntityInfo(kind: EntityKind.text, key: 7, objectId: 'note', name: 'Note'), 'set', {'value': 'hi'}).toString(),
-        'https://spa.alves.us/text/Note/set?value=hi',
+        'https://spa.example.com/text/Note/set?value=hi',
       );
     });
   });
@@ -201,7 +201,7 @@ void main() {
         remoteUrl: '',
         clientId: '',
         clientSecret: '',
-        defaultRemoteUrl: 'https://spa.alves.us',
+        defaultRemoteUrl: 'https://spa.example.com',
         defaultClientId: '00000000000000000000000000000000.access',
         defaultClientSecret: 'secret-value',
       );
@@ -212,12 +212,12 @@ void main() {
 
     test('inherits build-time credentials only when remoteUrl matches defaultRemoteUrl', () {
       final matching = CfAccessConfig.resolve(
-        remoteUrl: 'spa.alves.us/',
-        defaultRemoteUrl: 'https://spa.alves.us',
+        remoteUrl: 'spa.example.com/',
+        defaultRemoteUrl: 'https://spa.example.com',
         defaultClientId: '00000000000000000000000000000000.access',
         defaultClientSecret: 'secret-value',
       );
-      expect(matching.remoteUrl, 'https://spa.alves.us');
+      expect(matching.remoteUrl, 'https://spa.example.com');
       expect(matching.headers, {
         'CF-Access-Client-Id': '00000000000000000000000000000000.access',
         'CF-Access-Client-Secret': 'secret-value',
@@ -225,7 +225,7 @@ void main() {
 
       final other = CfAccessConfig.resolve(
         remoteUrl: 'https://tailscale-spa.example.ts.net',
-        defaultRemoteUrl: 'https://spa.alves.us',
+        defaultRemoteUrl: 'https://spa.example.com',
         defaultClientId: '00000000000000000000000000000000.access',
         defaultClientSecret: 'secret-value',
       );
@@ -238,7 +238,7 @@ void main() {
       expect(
         isCfAccessBlockedResponse(
           statusCode: 302,
-          locationHeader: 'https://darrin.cloudflareaccess.com/cdn-cgi/access/login/spa.alves.us',
+          locationHeader: 'https://example.cloudflareaccess.com/cdn-cgi/access/login/spa.example.com',
         ),
         isTrue,
       );
@@ -267,12 +267,12 @@ void main() {
         id: 'hotspring',
         name: 'Hot Tub',
         host: 'hotspring.local',
-        remoteUrl: 'https://spa.alves.us',
+        remoteUrl: 'https://spa.example.com',
         cfAccessClientId: 'id-1',
         cfAccessClientSecret: 'sec-1',
       );
       final back = SavedDevice.fromJson(remote.toJson());
-      expect(back.remoteUrl, 'https://spa.alves.us');
+      expect(back.remoteUrl, 'https://spa.example.com');
       expect(back.cfAccessClientId, 'id-1');
       expect(back.cfAccessClientSecret, 'sec-1');
     });
@@ -352,7 +352,7 @@ void main() {
 
       server.listen((req) async {
         req.response.statusCode = 302;
-        req.response.headers.set('location', 'https://darrin.cloudflareaccess.com/cdn-cgi/access/login/spa.alves.us');
+        req.response.headers.set('location', 'https://example.cloudflareaccess.com/cdn-cgi/access/login/spa.example.com');
         await req.response.close();
       });
 
@@ -380,7 +380,7 @@ void main() {
         final csec = req.headers.value('cf-access-client-secret');
         if (cid != 'test-id.access' || csec != 'test-secret') {
           req.response.statusCode = 302;
-          req.response.headers.set('location', 'https://darrin.cloudflareaccess.com/cdn-cgi/access/login/spa.alves.us');
+          req.response.headers.set('location', 'https://example.cloudflareaccess.com/cdn-cgi/access/login/spa.example.com');
           await req.response.close();
           return;
         }
@@ -469,7 +469,7 @@ void main() {
             ..boolean(5, true))
           .toBytes();
       b.add(head);
-      addEntry('remote_url', 'https://spa.alves.us');
+      addEntry('remote_url', 'https://spa.example.com');
       addEntry('cf_client_id', 'prov-id.access');
       addEntry('cf_client_secret', 'prov-secret');
 
@@ -477,7 +477,7 @@ void main() {
       expect(ev.isEvent, isTrue);
       expect(ev.service, 'esphome.iq2020_remote_config');
       expect(ev.data, {
-        'remote_url': 'https://spa.alves.us',
+        'remote_url': 'https://spa.example.com',
         'cf_client_id': 'prov-id.access',
         'cf_client_secret': 'prov-secret',
       });
