@@ -55,6 +55,18 @@ time:                            # MOBILE: clock from the internet instead of Ho
 
 external_components:
   - source: github://ylianst/esp-iq2020
+  - source: github://alvesd/ESP-IQ2020@mobile-app
+    components: [iq2020_web]
+    refresh: 0s
+
+web_server:                      # MOBILE: REST + SSE API for the on-device web UI
+  port: 80
+  version: 3
+  local: false
+  log: false
+  ota: false
+
+iq2020_web:                      # MOBILE: custom IQ2020 Spa web UI served at http://hotspring.local/
 
 # Make sure tx/rx pins are correct for your device.
 # GPIO26/32 is ok for M5Stack-ATOM + Tail485, look in GitHub devices link for your device.

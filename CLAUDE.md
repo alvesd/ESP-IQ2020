@@ -92,7 +92,7 @@ Whenever a user-facing feature, control, preset, or status indicator is added or
 2. **Phone app — iOS & Android** (`app/lib/ui/`): update the Flutter mobile UI.
 3. **Wear OS** (`wear/lib/main.dart`) + shared snapshot (`app/lib/watch/spa_snapshot.dart`).
 4. **Apple Watch** (`app/ios/IQ2020Watch/` + `app/lib/watch/watch_relay.dart`).
-5. **Web UI**: any ESP32-hosted web UI / web frontend once present in the repo.
+5. **Web UI** (`components/iq2020_web/index.html`): single-file UI hosted directly on the ESP32 (`web_server` + `iq2020_web`).
 
 ## Watch apps
 
