@@ -17,15 +17,21 @@ esphome:
   friendly_name: hotspring
   project:                       # MOBILE: lets the app recognise the device during discovery
     name: "iq2020.mobile"
-    version: "0.1.0"
+    version: "1.0.0"
 
 esp32:
   variant: esp32
   flash_size: 4MB
   framework:
     type: esp-idf
+    sdkconfig_options:             # MOBILE: allow Cloudflare Tunnel/Access headers (JWT + cookies)
+      CONFIG_HTTPD_MAX_REQ_HDR_LEN: "4096"
 
 logger:
+  level: INFO                    # MOBILE: reduce serial/log churn for long-term stability
+
+debug:                           # MOBILE: heap & reset-reason diagnostics
+  update_interval: 60s
 
 api:
   encryption:
@@ -52,9 +58,29 @@ time:                            # MOBILE: clock from the internet instead of Ho
   - platform: sntp
     id: sntp_time
     timezone: America/New_York
+    on_time:                     # MOBILE: weekly scheduled reboot (Sunday 4:00 AM) to keep heap fresh
+      - seconds: 0
+        minutes: 0
+        hours: 4
+        days_of_week: SUN
+        then:
+          - lambda: 'id(spa_history).save_now();'
+          - delay: 200ms
+          - button.press: esp_restart_button
 
 external_components:
-  - source: github://ylianst/esp-iq2020
+  - source: github://alvesd/ESP-IQ2020@mobile-app
+    components: [iq2020, iq2020_web, iq2020_history]
+    refresh: 0s
+
+web_server:                      # MOBILE: REST + SSE API for the on-device web UI
+  port: 80
+  version: 3
+  local: false
+  log: false
+  ota: false
+
+iq2020_web:                      # MOBILE: custom IQ2020 Spa web UI served at http://hotspring.local/
 
 # Make sure tx/rx pins are correct for your device.
 # GPIO26/32 is ok for M5Stack-ATOM + Tail485, look in GitHub devices link for your device.
@@ -72,6 +98,7 @@ iq2020:
 button:
   - platform: restart
     name: "ESP Restart"
+    id: esp_restart_button
   - platform: iq2020
     # Freshwater Salt only
     name: Salt Test
@@ -91,6 +118,48 @@ binary_sensor:
     # ACE/Freshwater Salt
     salt_level_confirmed:
       name: Salt Level Confirmed
+  - platform: template                 # MOBILE: true once >=1 rise step has calibrated rate
+    id: heating_rate_calibrated
+    name: Heating Rate Calibrated
+    entity_category: diagnostic
+
+globals:                               # MOBILE: ESP32-side heating rate-of-rise ETA state
+  - id: eta_session_target
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: eta_start_temp
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: eta_anchor_temp
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: eta_anchor_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: eta_first_cross_temp
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: eta_first_cross_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: eta_last_temp
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: eta_last_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+  - id: eta_sample_count
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 # If using Celsius units on the hot tub remote, replace _f_ with _c_ in the three entries below.
 # Feel free to remove any sensor that are not relevant for your hot tub.
@@ -99,8 +168,14 @@ sensor:
   # Temperature
     current_f_temperature:
       name: Current Temperature
+      id: current_water_temp
+      on_value:
+        - script.execute: update_heating_eta
     target_f_temperature:
       name: Target Temperature
+      id: target_water_temp
+      on_value:
+        - script.execute: update_heating_eta
     outlet_f_temperature:
       name: Heater Outlet
     pcb_f_temperature:
@@ -108,13 +183,29 @@ sensor:
   # Power
     power_l1:
       name: Pumps Power
+      id: power_l1
     power_heater:
       name: Controller Power
+      id: power_heater
     power_l2:
       name: Heater Power
+      id: power_l2
+    voltage_l1:
+      name: Voltage L1
+    voltage_heater:
+      name: Voltage Controller
+    voltage_l2:
+      name: Voltage L2
+    current_l1:
+      name: Current L1
+    current_heater:
+      name: Current Controller
+    current_l2:
+      name: Current L2
     # ACE/Freshwater Salt
     salt_content:
       name: Salt Level
+      id: salt_level_sensor
     # Freshwater Salt only
     salt_days_since_manual_test:
       name: Salt Last Manual Test (Days)
@@ -144,20 +235,121 @@ sensor:
     jets1_total_runtime:
       name: Jets 1 Runtime
       id: jets1_total_runtime
-#      jet1_low_total_runtime:
-#      name: Jets 1 Low Runtime
-#      id: jets1_low_total_runtime
-    jets2_total_runtime:
-      name: Jets 2 Runtime
-      id: jets2_total_runtime
-    jet2_low_total_runtime:
-      name: Jets 2 Low Runtime
-      id: jets2_low_total_runtime
-#    jets3_total_runtime:
-#      name: Jets 3 Runtime
-#      id: jets3_total_runtime
     power_on_counter:
       name: Power On Counter
+
+    # Front cabinet logo LED (mapped to human-readable text in text_sensor)
+    logo_lights:
+      internal: true
+      name: Logo Lights Number
+      on_value:
+        then:
+          - text_sensor.template.publish:
+              id: logo_lights_text
+              state: !lambda 'return std::to_string(int(x));'
+    # Real-Time Clock
+    rtc_timestamp:
+      name: RTC Unix Timestamp
+
+  # Daily energy (resets at midnight via sntp_time)
+  - platform: total_daily_energy
+    name: Pumps Energy
+    id: pumps_energy
+    power_id: power_l1
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+  - platform: total_daily_energy
+    name: Controller Energy
+    id: controller_energy
+    power_id: power_heater
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+  - platform: total_daily_energy
+    name: Heater Energy
+    id: heater_energy
+    power_id: power_l2
+    time_id: sntp_time
+    unit_of_measurement: "kWh"
+    state_class: total_increasing
+    device_class: energy
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  # ESP32 diagnostics
+  - platform: wifi_signal
+    name: "ESP WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: copy
+    source_id: wifi_signal_db
+    name: "ESP WiFi Signal Percent"
+    filters:
+      - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    entity_category: diagnostic
+    device_class: ""
+  - platform: uptime
+    name: "ESP Uptime"
+    id: esp_uptime
+    entity_category: diagnostic
+    on_value:                      # MOBILE: 7-day uptime fallback reboot even if SNTP missed Sunday 4 AM
+      - if:
+          condition:
+            lambda: 'return x >= 604800.0f;'
+          then:
+            - lambda: 'id(spa_history).save_now();'
+            - delay: 200ms
+            - button.press: esp_restart_button
+  - platform: debug                # MOBILE: heap & loop-time monitoring
+    free:
+      name: "ESP Free Heap"
+      id: esp_free_heap
+      entity_category: diagnostic
+    block:
+      name: "ESP Max Free Block"
+      entity_category: diagnostic
+    loop_time:
+      name: "ESP Loop Time"
+      entity_category: diagnostic
+
+  # MOBILE: ESP32-tracked heating rate-of-rise and Ready ETA
+  - platform: template
+    id: heating_rate
+    name: Heating Rate
+    unit_of_measurement: "°F/h"
+    accuracy_decimals: 1
+    icon: "mdi:thermometer-chevron-up"
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: ready_eta_seconds
+    name: Ready ETA Seconds
+    unit_of_measurement: "s"
+    accuracy_decimals: 0
+    icon: "mdi:timer-sand"
+    entity_category: diagnostic
+    update_interval: never
+  - platform: template
+    id: heating_progress
+    name: Heating Progress
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    icon: "mdi:progress-clock"
+    entity_category: diagnostic
+    update_interval: never
 
 
 switch:
@@ -192,12 +384,52 @@ switch:
     icon: "mdi:rocket-launch"
     datapoint: 8
 
+select:
+  - platform: iq2020
+    name: Light Color
+    id: lights1_color
+    datapoint: 1
+    icon: "mdi:palette"
+    options:
+      - Violet
+      - Blue
+      - Cyan
+      - Green
+      - White
+      - Yellow
+      - Red
+      - Cycle
+
 number:
   - platform: iq2020                # MOBILE: Freshwater salt production level 1-10 (app Salt tab)
     name: Salt System Power
     id: salt_power
     icon: "mdi:water-plus"
     datapoint: 5
+  - platform: template                 # MOBILE: global presets persisted in flash for all clients
+    id: heat_up_temperature
+    name: Heat Up Temperature
+    entity_category: config
+    icon: "mdi:fire"
+    unit_of_measurement: "°F"
+    optimistic: true
+    restore_value: true
+    initial_value: 102
+    min_value: 79
+    max_value: 104
+    step: 1
+  - platform: template                 # MOBILE: global presets persisted in flash for all clients
+    id: vacation_temperature
+    name: Vacation Temperature
+    entity_category: config
+    icon: "mdi:airplane"
+    unit_of_measurement: "°F"
+    optimistic: true
+    restore_value: true
+    initial_value: 85
+    min_value: 79
+    max_value: 104
+    step: 1
 
 fan:
   - platform: iq2020
@@ -215,3 +447,219 @@ text_sensor:
   - platform: iq2020
     versionstr:
       name: Version
+    salt_module_status:
+      name: Salt Module Status
+    salt_level_friendly:
+      name: Salt Level Friendly
+    rtc_datetime:
+      name: Real Time Clock
+      entity_category: diagnostic
+  - platform: template
+    id: logo_lights_text
+    name: Logo Lights
+    icon: "mdi:led-on"
+    filters:
+      - map:
+        - "0 -> Unknown"
+        - "1 -> Power on"
+        - "2 -> Power on & ready on"
+        - "3 -> Ready flash"
+        - "4 -> Power flash"
+        - "5 -> Power and ready flash"
+        - "6 -> Power and ready alternate"
+        - "7 -> Power and ready salt error"
+  - platform: template                 # MOBILE: formatted clock time when water will reach target
+    id: ready_time
+    name: Ready Time
+    icon: "mdi:clock-check-outline"
+    update_interval: never
+  - platform: debug
+    reset_reason:
+      name: "ESP Reset Reason"
+      entity_category: diagnostic
+
+iq2020_history:                          # MOBILE: NVS-persisted 3-tier metrics (14d@6h, 31d@1d, 24mo@1mo)
+  id: spa_history
+  time_id: sntp_time
+  bucket_hours: 6
+  water_temp_id: current_water_temp
+  power_ids: [power_l1, power_heater, power_l2]
+  energy_ids: [pumps_energy, controller_energy, heater_energy]
+  salt_id: salt_level_sensor
+  free_heap_id: esp_free_heap
+  heater_runtime_id: heater_total_runtime
+  water_temp:
+    name: "History Water Temp"
+  water_temp_daily:
+    name: "History Water Temp Daily"
+  water_temp_monthly:
+    name: "History Water Temp Monthly"
+  power:
+    name: "History Power"
+  power_daily:
+    name: "History Power Daily"
+  power_monthly:
+    name: "History Power Monthly"
+  energy:
+    name: "History Energy"
+  energy_monthly:
+    name: "History Energy Monthly"
+  salt:
+    name: "History Salt"
+  salt_daily:
+    name: "History Salt Daily"
+  salt_monthly:
+    name: "History Salt Monthly"
+  heater_daily:
+    name: "History Heater Daily"
+  heater_monthly:
+    name: "History Heater Monthly"
+  free_heap:
+    name: "History Free Heap"
+
+interval:
+  - interval: 15s
+    then:
+      - script.execute: update_heating_eta
+
+script:                                # MOBILE: ESP32 rate-of-rise + Ready ETA tracker
+  - id: update_heating_eta
+    mode: single
+    then:
+      - lambda: |-
+          const float kDefaultRate = 5.0f;
+          const float kMinRate = 1.0f;
+          const float kMaxRate = 15.0f;
+          const float kRiseStep = 0.5f;
+
+          if (!id(current_water_temp).has_state() || !id(target_water_temp).has_state()) {
+            return;
+          }
+          const float cur = id(current_water_temp).state;
+          const float tgt = id(target_water_temp).state;
+          if (std::isnan(cur) || std::isnan(tgt)) {
+            return;
+          }
+
+          auto pub_num = [](auto *s, float val, float eps) {
+            if (!s->has_state() || std::isnan(s->state) || fabsf(s->state - val) >= eps) {
+              s->publish_state(val);
+            }
+          };
+          auto pub_bin = [](auto *b, bool val) {
+            if (!b->has_state() || b->state != val) {
+              b->publish_state(val);
+            }
+          };
+          auto pub_txt = [](auto *t, const std::string &val) {
+            if (!t->has_state() || t->state != val) {
+              t->publish_state(val);
+            }
+          };
+          auto reset_session = [&]() {
+            id(eta_session_target) = NAN;
+            id(eta_start_temp) = NAN;
+            id(eta_anchor_temp) = NAN;
+            id(eta_anchor_ms) = 0;
+            id(eta_first_cross_temp) = NAN;
+            id(eta_first_cross_ms) = 0;
+            id(eta_last_temp) = NAN;
+            id(eta_last_ms) = 0;
+            id(eta_sample_count) = 0;
+          };
+
+          if (cur >= tgt - 0.05f) {
+            // Reached (or holding at/above) target temperature.
+            reset_session();
+            pub_num(id(heating_rate), 0.0f, 0.05f);
+            pub_num(id(ready_eta_seconds), 0.0f, 1.0f);
+            pub_num(id(heating_progress), 100.0f, 0.5f);
+            pub_bin(id(heating_rate_calibrated), false);
+            pub_txt(id(ready_time), "Ready");
+            return;
+          }
+
+          const uint32_t now_ms = millis();
+          if (id(eta_sample_count) == 0 ||
+              std::isnan(id(eta_session_target)) ||
+              fabsf(id(eta_session_target) - tgt) > 0.25f) {
+            id(eta_session_target) = tgt;
+            id(eta_start_temp) = cur;
+            id(eta_anchor_temp) = cur;
+            id(eta_anchor_ms) = now_ms;
+            id(eta_first_cross_temp) = NAN;
+            id(eta_first_cross_ms) = 0;
+            id(eta_last_temp) = cur;
+            id(eta_last_ms) = now_ms;
+            id(eta_sample_count) = 1;
+          } else if (cur < id(eta_last_temp) - kRiseStep) {
+            // Re-anchor slope if water cooled (e.g. cover opened), keeping earliest start for progress.
+            id(eta_anchor_temp) = cur;
+            id(eta_anchor_ms) = now_ms;
+            id(eta_first_cross_temp) = NAN;
+            id(eta_first_cross_ms) = 0;
+            id(eta_last_temp) = cur;
+            id(eta_last_ms) = now_ms;
+            id(eta_sample_count) = 1;
+            if (std::isnan(id(eta_start_temp)) || cur < id(eta_start_temp)) {
+              id(eta_start_temp) = cur;
+            }
+          } else if (cur >= id(eta_last_temp) + kRiseStep) {
+            id(eta_sample_count) += 1;
+            id(eta_last_temp) = cur;
+            id(eta_last_ms) = now_ms;
+            if (id(eta_sample_count) == 2) {
+              id(eta_first_cross_temp) = cur;
+              id(eta_first_cross_ms) = now_ms;
+            }
+          }
+
+          float rate = kDefaultRate;
+          bool calibrated = false;
+          if (id(eta_sample_count) == 2) {
+            const float dt_h = fmaxf(1.0f / 60.0f, ((uint32_t)(id(eta_last_ms) - id(eta_anchor_ms))) / 3600000.0f);
+            float obs = (id(eta_last_temp) - id(eta_anchor_temp)) / dt_h;
+            obs = fminf(kMaxRate, fmaxf(kMinRate, obs));
+            rate = 0.5f * obs + 0.5f * kDefaultRate;
+            calibrated = true;
+          } else if (id(eta_sample_count) >= 3) {
+            const float dt_h = fmaxf(1.0f / 60.0f, ((uint32_t)(id(eta_last_ms) - id(eta_first_cross_ms))) / 3600000.0f);
+            float measured = (id(eta_last_temp) - id(eta_first_cross_temp)) / dt_h;
+            rate = fminf(kMaxRate, fmaxf(kMinRate, measured));
+            calibrated = true;
+          }
+
+          const float rem_sec = fmaxf(60.0f, ((tgt - cur) / rate) * 3600.0f);
+          const float start_t = std::isnan(id(eta_start_temp)) ? cur : id(eta_start_temp);
+          const float span = fmaxf(1.0f, tgt - start_t);
+          float pct = ((cur - start_t) / span) * 100.0f;
+          pct = roundf(fminf(96.0f, fmaxf(8.0f, pct)));
+
+          std::string ready_str;
+          auto now_time = id(sntp_time).now();
+          if (now_time.is_valid()) {
+            time_t ready_epoch = now_time.timestamp + (time_t) lroundf(rem_sec);
+            struct tm rt;
+            localtime_r(&ready_epoch, &rt);
+            int h24 = rt.tm_hour;
+            int h12 = h24 % 12;
+            if (h12 == 0) h12 = 12;
+            char buf[20];
+            snprintf(buf, sizeof(buf), "%d:%02d %s", h12, rt.tm_min, h24 >= 12 ? "PM" : "AM");
+            ready_str = buf;
+          } else {
+            int mins = (int) lroundf(rem_sec / 60.0f);
+            char buf[20];
+            if (mins >= 60) {
+              snprintf(buf, sizeof(buf), "In %dh %dm", mins / 60, mins % 60);
+            } else {
+              snprintf(buf, sizeof(buf), "In %dm", mins);
+            }
+            ready_str = buf;
+          }
+
+          pub_num(id(heating_rate), rate, 0.05f);
+          pub_num(id(ready_eta_seconds), rem_sec, 15.0f);
+          pub_num(id(heating_progress), pct, 1.0f);
+          pub_bin(id(heating_rate_calibrated), calibrated);
+          pub_txt(id(ready_time), ready_str);

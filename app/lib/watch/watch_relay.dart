@@ -47,7 +47,7 @@ class WatchRelay {
       if (req['op'] != 'snapshot') {
         await applyWatchCommand(client, snap, req);
         // Give the spa a moment to report the new state before answering.
-        await _waitFor(client, const Duration(milliseconds: 1500), (c) => false);
+        await Future<void>.delayed(const Duration(milliseconds: 1500));
         snap = _snapshot();
       }
       return {'snapshot': snap.toMap()};
@@ -56,7 +56,12 @@ class WatchRelay {
     }
   }
 
-  SpaSnapshot _snapshot() => SpaSnapshot.fromClient(_client!, name: _device!.name);
+  SpaSnapshot _snapshot() => SpaSnapshot.fromClient(
+        _client!,
+        name: _device!.name,
+        heatUpTempC: _device!.heatUpTempC,
+        vacationTempC: _device!.vacationTempC,
+      );
 
   /// The client for the first saved spa, connected and with its states loaded, or null when the
   /// phone has no spa saved.
@@ -65,15 +70,27 @@ class WatchRelay {
     await store.load();
     final device = store.devices.firstOrNull;
     if (device == null) return null;
-    if (_device?.id != device.id || _device?.encryptionKey != device.encryptionKey || _device?.host != device.host) {
+    if (_device?.id != device.id ||
+        _device?.encryptionKey != device.encryptionKey ||
+        _device?.host != device.host ||
+        _device?.port != device.port ||
+        _device?.remoteUrl != device.remoteUrl ||
+        _device?.cfAccessClientId != device.cfAccessClientId ||
+        _device?.cfAccessClientSecret != device.cfAccessClientSecret) {
       _close();
       _device = device;
+      final remote = device.effectiveRemote;
       _client = EspHomeClient(
         host: device.host,
         port: device.port,
         encryptionKey: device.encryptionKey.isEmpty ? null : device.encryptionKey,
+        remoteUrl: remote.remoteUrl,
+        cfAccessClientId: remote.clientId,
+        cfAccessClientSecret: remote.clientSecret,
         clientInfo: 'IQ2020 Watch relay',
       )..addListener(_schedulePush);
+    } else {
+      _device = device;
     }
     final client = _client!;
     await client.connect();

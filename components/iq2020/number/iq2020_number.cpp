@@ -2,6 +2,8 @@
 #include "iq2020_number.h"
 #include "../iq2020.h"
 
+#include <cmath>
+
 extern IQ2020Component* g_iq2020_main;
 extern esphome::iq2020_number::IQ2020Number* g_iq2020_number[NUMBERCOUNT];
 
@@ -55,10 +57,15 @@ namespace iq2020_number {
 	}
 
 	void IQ2020Number::control(float value) {
+		if (std::isnan(value)) return;
+		float lo = this->traits.get_min_value();
+		float hi = this->traits.get_max_value();
+		if (value < lo) value = lo;
+		if ((maximum != 0) && (value > maximum)) value = maximum;
+		if (value > hi) value = hi;
 		ESP_LOGD(TAG, "Number:%d write value: %.1f", number_id, value);
-		if ((maximum != 0) && (value > maximum)) { value = maximum; }
 		this->publish_state(value);
-		if (g_iq2020_main != NULL) { g_iq2020_main->numberAction(number_id, value); }
+		if (g_iq2020_main != NULL) { g_iq2020_main->numberAction(number_id, static_cast<int>(std::lroundf(value))); }
 	}
 
 	void IQ2020Number::dump_config() {

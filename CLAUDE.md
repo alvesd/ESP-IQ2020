@@ -85,6 +85,15 @@ Talking to a real device from the command line (independent of the Dart client):
 - The ESP32 allows at most 5 API connections. Each app relaunch leaves a stale connection until the ESP32's keepalive drops it, so rapid relaunches during testing show "Connection reset by peer" until the slots free up.
 - `device_store.dart`: saved devices and their API keys are kept in `flutter_secure_storage`. Discovery uses `bonsoir` for `_esphomelib._tcp`; iOS needs `NSLocalNetworkUsageDescription` and `NSBonjourServices`, which `bootstrap.sh` adds.
 
+## Cross-platform & web parity
+
+Whenever a user-facing feature, control, preset, or status indicator is added or changed, update **all** applicable surfaces together so no device or UI falls behind:
+1. **ESP32 firmware** (`firmware/hotspring.yaml`): keep shared device-level state and calculations on the ESP32 when possible (persistent global preset temperatures, heating rate-of-rise / Ready ETA, etc.) so every connected client sees the same numbers.
+2. **Phone app — iOS & Android** (`app/lib/ui/`): update the Flutter mobile UI.
+3. **Wear OS** (`wear/lib/main.dart`) + shared snapshot (`app/lib/watch/spa_snapshot.dart`).
+4. **Apple Watch** (`app/ios/IQ2020Watch/` + `app/lib/watch/watch_relay.dart`).
+5. **Web UI** (`components/iq2020_web/index.html`): single-file UI hosted directly on the ESP32 (`web_server` + `iq2020_web`).
+
 ## Watch apps
 
 Both show one screen: water and target temperature (−/+, debounced like the phone), heater state, jets and lights toggles, salt zone. The data model is `app/lib/watch/spa_snapshot.dart` (`SpaSnapshot.fromClient`, `applyWatchCommand`), shared by both.
@@ -97,5 +106,8 @@ Both show one screen: water and target temperature (−/+, debounced like the ph
 
 - The app has been run against the owner's hot tub (`hotspring`, ESPHome 2026.11.0, `firmware/hotspring.yaml`): encrypted connect, entity listing, live states, and the controls (switches, jets, lights, target temperature via −/+ and the dial) all work. The Dart Noise code also matches the reference Python `noiseprotocol` 0.3.1 byte for byte (`test/noise_interop_test.dart`).
 
-## Known gaps
-- Remote access (outside home Wi‑Fi) isn't implemented. The intended options are a user VPN (Tailscale/WireGuard) or ESPHome `mqtt:` to a hosted broker. Never port-forward 6053 or the RS485 bridge port.
+## Remote access (optional Cloudflare Tunnel + Access)
+- The phone app (`app/`), Apple Watch relay (`app/lib/watch/watch_relay.dart`), and Wear OS app (`wear/`) work **LAN-only** over TCP `6053` with zero tunnel configuration (`SavedDevice.remoteUrl` empty by default).
+- When `remoteUrl` is configured on a saved spa (e.g., `https://spa.alves.us` → `Gramercy-tunnel` → `http://192.168.5.55`), `EspHomeClient` tries local TCP `6053` first (3 s timeout) and falls back to ESPHome `web_server` v3 (`GET /events` SSE + REST POSTs) over HTTPS. Non-Cloudflare HTTPS proxies work without credentials; Cloudflare Access (`*.alves.us` `AgraGoogChallenge`) accepts a `CF-Access-Client-Id` / `CF-Access-Client-Secret` service token (`iq2020-mobile`).
+- `firmware/hotspring.yaml` sets `sdkconfig_options: CONFIG_HTTPD_MAX_REQ_HDR_LEN: "4096"` so ESP-IDF's `httpd` accepts Cloudflare Access's `Cf-Access-Jwt-Assertion` header and `CF_Authorization` cookie without returning HTTP 431.
+- Owner build-time defaults live in git-ignored `app/cf_access.local.json` (template: `app/cf_access.example.json`) and are passed via `--dart-define-from-file=cf_access.local.json`. Build-time credentials only apply when a device's configured `remoteUrl` matches `IQ2020_REMOTE_URL` — LAN-only devices and other URLs never inherit them. Never port-forward 6053 or the RS485 bridge port.

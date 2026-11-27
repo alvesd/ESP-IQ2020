@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#071923">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='17' fill='%23071923' stroke='%232eb0ff' stroke-width='2'/%3E%3Cpath d='M18 6c-6.6 0-12 5.4-12 12 0 4.8 2.8 8.9 6.9 10.8C10.5 23 13.7 15.2 21.8 14.3 18.6 10.6 12.2 12.5 9.8 18c-.2-6.5 6.8-10.3 12.2-6.5l-2 2C14.7 9 9.5 14 12.6 19.6' fill='none' stroke='%232eb0ff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>IQ2020 Spa</title>
+<style>
+:root{--bg1:#06131c;--bg2:#0b2433;--card:rgba(16,38,52,.78);--card-solid:#102634;--border:rgba(255,255,255,.11);--fg:#f3f8fb;--muted:#97b4c4;--aqua:#4fe3eb;--amber:#ffb76b;--saltRed:#e5484d;--saltYel:#f5b83d;--saltGrn:#30a46c}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif;color:var(--fg);background:radial-gradient(120% 80% at 20% 0%,#0f3549 0%,var(--bg2) 45%,var(--bg1) 100%) fixed}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) calc(74px + env(safe-area-inset-bottom)) env(safe-area-inset-left)}
+button,select,input{font:inherit;color:inherit}
+.topbar{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(6,19,28,.78);border-bottom:1px solid var(--border)}
+.topbar-in{max-width:960px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px}
+.brand{font-size:19px;font-weight:700;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spacer{flex:1}
+.nav-top{display:none;gap:6px}
+.nav-btn{border:1px solid transparent;background:transparent;color:var(--muted);padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.nav-btn.act{background:rgba(79,227,235,.16);border-color:rgba(79,227,235,.4);color:var(--fg)}
+.status-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid var(--border);font-size:12px;font-weight:600;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%}
+.wrap{max-width:720px;margin:0 auto;padding:12px 16px 24px}
+.banner{background:rgba(229,72,77,.18);border:1px solid rgba(229,72,77,.45);border-radius:16px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.sec{font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--muted);text-transform:uppercase;padding:22px 4px 10px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;backdrop-filter:blur(10px)}
+.climate{border-radius:28px;padding:18px 20px 22px;color:#fff;box-shadow:0 16px 40px rgba(0,0,0,.35);transition:background .4s ease}
+.c-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.2);font-size:12px;font-weight:600}
+.logo-wrap{display:flex;flex-direction:column;align-items:flex-end;min-width:0}
+.logo-lbl{font-size:11px;color:rgba(255,255,255,.9);font-weight:500;margin-top:2px;text-align:right}
+.dial-box{position:relative;max-width:296px;margin:8px auto 0;aspect-ratio:1.15;touch-action:none;user-select:none}
+.dial-svg{width:100%;height:100%;display:block;overflow:visible}
+.dial-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:22px 42px 48px;pointer-events:none}
+.dial-center.plain{padding:44px}
+.temp-big{font-size:clamp(42px,11vw,62px);font-weight:300;line-height:1;letter-spacing:-1px}
+.temp-sub{font-size:13px;color:rgba(255,255,255,.8);margin-top:4px}
+.dial-min,.dial-max{position:absolute;bottom:4px;font-size:11px;color:rgba(255,255,255,.75);pointer-events:none}
+.dial-min{left:14%}.dial-max{right:14%}
+.salt-pill{position:absolute;left:50%;bottom:18%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.24);font-size:11.5px;font-weight:500;white-space:nowrap;cursor:pointer;backdrop-filter:blur(8px)}
+.salt-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.salt-div{width:1px;height:10px;background:rgba(255,255,255,.28)}
+.boost-pill{position:absolute;left:50%;bottom:2px;transform:translateX(-50%);display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;background:rgba(56,217,245,.26);border:1px solid rgba(124,235,255,.78);color:#d8f8ff;font-size:10.5px;font-weight:700;white-space:nowrap;cursor:pointer}
+.stepper{max-width:360px;margin:8px auto 0;display:flex;align-items:center;justify-content:space-between}
+.rnd{width:54px;height:54px;border-radius:50%;border:none;background:rgba(255,255,255,.22);color:#fff;font-size:26px;font-weight:400;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.rnd:disabled{opacity:.38;cursor:default}
+.set-val{font-size:28px;font-weight:600;line-height:1.1;text-align:center}
+.set-lbl{font-size:12px;color:rgba(255,255,255,.8);text-align:center;margin-top:2px}
+.presets{max-width:360px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.preset{position:relative;overflow:hidden;border-radius:18px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.16);color:#fff;padding:10px 11px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px}
+.preset.act{background:rgba(255,255,255,.96);border-color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.preset:disabled{opacity:.5;cursor:default}
+.p-ico{width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none;background:rgba(255,255,255,.2)}
+.preset.act .p-ico{background:rgba(0,0,0,.07)}
+.p-txt{min-width:0;flex:1}
+.p-t{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-s{font-size:11.5px;font-weight:500;opacity:.88;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.p-bar{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.1)}
+.p-fill{height:100%;transition:width .4s ease}
+.seg{max-width:360px;margin:14px auto 0;display:flex;border:1px solid rgba(255,255,255,.5);border-radius:999px;overflow:hidden}
+.seg button{flex:1;border:none;background:transparent;color:#fff;padding:8px 10px;font-size:13px;font-weight:600;cursor:pointer;border-right:1px solid rgba(255,255,255,.35)}
+.seg button:last-child{border-right:none}
+.seg button.act{background:#fff;color:#0e4f63}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.big-tile{height:132px;border-radius:24px;padding:16px;border:1px solid var(--border);background:var(--card);display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;text-align:left;transition:transform .12s,box-shadow .2s}
+.big-tile:active{transform:scale(.98)}
+.big-top{display:flex;align-items:center;justify-content:space-between}
+.ico-badge{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.bt-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-lbl{font-size:13px;opacity:.78;margin-top:2px}
+.num-card{padding:14px 16px 12px;margin-bottom:12px}
+.num-head{display:flex;align-items:center;gap:12px}
+.num-val{font-size:20px;font-weight:700;margin-left:auto}
+.slider{width:100%;margin-top:10px;accent-color:var(--aqua);cursor:pointer}
+.sensor-card{padding:14px;display:flex;flex-direction:column;gap:4px}
+.sensor-val{font-size:22px;font-weight:600;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sensor-name{font-size:12.5px;color:var(--muted);line-height:1.25}
+.row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.row:last-child{border-bottom:none}
+.row-main{flex:1;min-width:0}
+.row-t{font-size:14.5px;font-weight:500}
+.row-s{font-size:12px;color:var(--muted);margin-top:2px}
+.row-right{display:flex;align-items:center;gap:8px;flex:none}
+.step-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--fg);font-size:18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.step-btn:disabled{opacity:.35;cursor:default}
+.btn-out{padding:6px 14px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);font-size:13px;font-weight:600;cursor:pointer}
+.sel{background:#0b212e;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:13.5px}
+.sw{position:relative;width:44px;height:26px;border-radius:999px;background:rgba(255,255,255,.18);border:none;cursor:pointer;transition:background .2s;padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s}
+.sw.on::after{transform:translateX(18px)}
+.exp summary{padding:14px 16px;font-weight:600;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between}
+.exp summary::after{content:"▾";color:var(--muted)}
+.exp[open] summary::after{content:"▴"}
+.salt-hero{padding:18px 20px 14px;text-align:center}
+.salt-badge{display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:600;margin-top:6px}
+.bbar{position:fixed;left:0;right:0;bottom:0;z-index:20;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(6,19,28,.88);border-top:1px solid var(--border);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+.bbar button{flex:1;border:none;background:transparent;color:var(--muted);padding:6px 4px;border-radius:14px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;cursor:pointer}
+.bbar button.act{color:var(--aqua);background:rgba(79,227,235,.12)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:#102634;border:1px solid var(--border);border-radius:22px;padding:20px;max-width:340px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.modal h3{margin:0 0 8px;font-size:18px}
+.modal p{margin:0 0 18px;font-size:13.5px;color:var(--muted)}
+.modal-act{display:flex;justify-content:flex-end;gap:10px}
+.btn-pri{padding:8px 16px;border-radius:999px;border:none;background:var(--aqua);color:#061a24;font-weight:700;cursor:pointer}
+.mc{padding:12px 14px 10px;margin-top:10px}
+.mc-hd{display:flex;align-items:center;gap:8px}
+.mc-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.mc-badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}
+.mc-val{font-size:14px;font-weight:700}
+.mc-tabs{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
+.mc-tab{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--muted);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.mc-tab.act{font-weight:700}
+.mc-svg{width:100%;height:54px;display:block;margin-top:8px}
+.mc-ax{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px}
+.mc-ft{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
+.seg{display:flex;gap:4px;padding:4px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid var(--border);margin-bottom:14px}
+.seg button{flex:1;border:1px solid transparent;background:transparent;color:var(--muted);padding:8px 10px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.seg button.act{background:rgba(79,227,235,.18);border-color:rgba(79,227,235,.55);color:var(--aqua);font-weight:700}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.kpi{padding:10px 12px}
+.kpi-l{font-size:11px;color:var(--muted)}
+.kpi-v{font-size:18px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi-s{font-size:11px;color:var(--muted);margin-top:2px}
+.hist-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;margin-top:10px}
+.hist-grid .mc{margin-top:0}
+.mc-tt{position:fixed;z-index:60;display:none;pointer-events:none;background:#102634;border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:11.5px;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+@media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.hist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:640px){body{padding-bottom:24px}.bbar{display:none}.nav-top{display:flex}.grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <div id="spaName" class="brand">IQ2020 Spa</div>
+    <nav id="navTop" class="nav-top"></nav>
+    <div class="spacer"></div>
+    <div class="status-chip"><span id="connDot" class="dot" style="background:#f59e0b"></span><span id="connTxt">Connecting</span></div>
+  </div>
+</header>
+<main id="app" class="wrap"></main>
+<nav id="navBot" class="bbar"></nav>
+<div id="mcTip" class="mc-tt"><div id="mcTipLbl" style="font-weight:700"></div><div id="mcTipVal" style="color:var(--muted)"></div></div>
+<div id="modalBg" class="modal-bg">
+  <div class="modal">
+    <h3 id="modalTitle">Confirm?</h3>
+    <p id="modalDesc">Run this action on the hot tub?</p>
+    <div class="modal-act">
+      <button id="modalCancel" class="btn-out" type="button">Cancel</button>
+      <button id="modalOk" class="btn-pri" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+<script>
+const entities = {};
+let spaTitle = "IQ2020 Spa";
+let connState = "connecting";
+let activeTab = "Comfort";
+let pendingTargetC = null;
+let targetDebounce = null;
+let targetClearTimer = null;
+let draggingNumber = {};
+let logoPhase = 0;
+
+const TABS = [
+  { id: "Comfort", icon: "thermo" },
+  { id: "Power", icon: "bolt" },
+  { id: "Usage", icon: "timer" },
+  { id: "Salt", icon: "salt" },
+  { id: "Settings", icon: "gear" },
+];
+
+const TEMP_STOPS = [[0,"#3D7BFF"],[0.35,"#22C3D6"],[0.72,"#FFB347"],[1,"#FF5A36"]];
+const SALT_ZONES = [[0,24,"Too low","#E5484D"],[24,36,"Low","#F5B83D"],[36,84,"Good","#30A46C"],[84,96,"High","#F5B83D"],[96,120,"Too high","#E5484D"]];
+
+function oid(e) {
+  return String(e.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
+function encName(e) { return encodeURIComponent(e.name); }
+function num(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; }
+function lerpHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round(((pa>>16)&255) + (((pb>>16)&255)-((pa>>16)&255))*t);
+  const g = Math.round(((pa>>8)&255) + (((pb>>8)&255)-((pa>>8)&255))*t);
+  const bl = Math.round((pa&255) + ((pb&255)-(pa&255))*t);
+  return `#${((1<<24)+(r<<16)+(g<<8)+bl).toString(16).slice(1)}`;
+}
+function tempColor(f) {
+  const t = Number.isNaN(f) ? 0.35 : Math.max(0, Math.min(1, f));
+  for (let i = 1; i < TEMP_STOPS.length; i++) {
+    if (t <= TEMP_STOPS[i][0]) {
+      return lerpHex(TEMP_STOPS[i-1][1], TEMP_STOPS[i][1], (t - TEMP_STOPS[i-1][0]) / (TEMP_STOPS[i][0] - TEMP_STOPS[i-1][0]));
+    }
+  }
+  return TEMP_STOPS[TEMP_STOPS.length - 1][1];
+}
+function saltZone(v) {
+  if (Number.isNaN(v)) return null;
+  for (const z of SALT_ZONES) if (v < z[1]) return { label: z[2], color: z[3] };
+  return { label: SALT_ZONES[4][2], color: SALT_ZONES[4][3] };
+}
+function fmt(v, d=0) { return Number.isNaN(v) ? "—" : v.toFixed(d); }
+const DUR = { s: 1, min: 60, h: 3600, d: 86400 };
+function fmtDur(v, u) {
+  if (Number.isNaN(v)) return "—";
+  const mult = DUR[u];
+  if (!mult) return `${v.toFixed(0)} ${u}`.trim();
+  const tot = Math.round(v * mult), days = Math.floor(tot / 86400), hrs = Math.floor((tot % 86400) / 3600), mins = Math.floor((tot % 3600) / 60);
+  if (days > 0) return `${days.toLocaleString()}d ${hrs}h`;
+  if (hrs > 0) return `${hrs}h ${mins}m`;
+  return `${mins}m`;
+}
+function sensorText(e) {
+  const v = num(e.value), u = e.uom || "";
+  if (DUR[u]) return fmtDur(v, u);
+  if (!u && oid(e).endsWith("_hours")) return fmtDur(v, "h");
+  if (Number.isNaN(v)) return e.state && e.state !== "NA" ? e.state : "—";
+  return `${v % 1 === 0 ? v.toFixed(0) : v.toFixed(2).replace(/0+$/,"").replace(/\.$/,"")} ${u}`.trim();
+}
+function iconSvg(kind, size=18) {
+  const s = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
+  switch (kind) {
+    case "thermo": return `<svg ${s}><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>`;
+    case "bolt": return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8z"/></svg>`;
+    case "timer": return `<svg ${s}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg>`;
+    case "salt": return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="M7 8h10l-.9-3A3 3 0 0 0 13.2 3h-2.4A3 3 0 0 0 7.9 5L7 8zm-0.7 1h11.4v1.6H6.3V9zm1.1 2.4h9.2L17.8 20.5A1.5 1.5 0 0 1 16.3 22H7.7a1.5 1.5 0 0 1-1.5-1.5L7.4 11.4z"/></svg>`;
+    case "gear": return `<svg ${s}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+    case "flame": return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 2c.3 2.7-1.1 4.4-2.5 5.8C9.6 9.1 8.5 10.6 8.5 13c0 2.5 1.8 4.4 4.2 4.8-.9-.8-1.4-1.9-1.4-3.1 0-1.6.9-2.8 2-3.9.4 1.6 1.7 2.8 3.2 3.2-.2 3.3-2.5 6-6 6-3.7 0-6.5-2.8-6.5-6.6 0-3.3 2-5.7 4-7.8C9.8 3.7 11.7 2.4 13.5 2z"/></svg>`;
+    case "plane": return `<svg ${s}><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>`;
+    case "check": return `<svg ${s}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>`;
+    case "fan": return `<svg ${s}><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412z"/></svg>`;
+    case "bulb": return `<svg ${s}><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`;
+    case "lock": return `<svg ${s}><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+    case "clean": return `<svg ${s}><path d="M3 22v-3a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v3"/><path d="M12 15V3"/></svg>`;
+    case "sun": return `<svg ${s}><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>`;
+    default: return `<svg ${s}><path d="M12 20v-6m0-4V4m-6 16v-2m0-4V4m12 16v-8m0-4V4"/></svg>`;
+  }
+}
+function entityIcon(e) {
+  const s = `${oid(e)} ${e.icon || ""}`;
+  if (s.includes("light")) return "bulb";
+  if (s.includes("summer") || s.includes("sun")) return "sun";
+  if (s.includes("lock")) return "lock";
+  if (s.includes("clean") || s.includes("vacuum")) return "clean";
+  if (s.includes("jet") || s.includes("turbine")) return "fan";
+  if (s.includes("salt")) return "salt";
+  if (s.includes("power") || ["W","A","V","kWh"].includes(e.uom)) return "bolt";
+  if (s.includes("temp") || e.uom === "°F" || e.uom === "°C") return "thermo";
+  if (s.includes("runtime") || DUR[e.uom]) return "timer";
+  return "tune";
+}
+function accentFor(e) {
+  const s = `${oid(e)} ${e.icon || ""}`;
+  if (s.includes("light")) return "#F5A623";
+  if (s.includes("jet") || s.includes("turbine")) return "#1FA2B4";
+  if (s.includes("salt")) return "#3D8BFD";
+  if (s.includes("summer") || s.includes("sun")) return "#F0643C";
+  if (s.includes("lock")) return "#5C6BC0";
+  if (s.includes("clean") || s.includes("vacuum")) return "#2EAD6B";
+  if (["W","kW","V","A","kWh"].includes(e.uom)) return "#E8A317";
+  if (DUR[e.uom] || s.includes("runtime") || s.includes("counter")) return "#8E6CEF";
+  if (s.includes("temp")) return "#F0643C";
+  return "#1FA2B4";
+}
+function isPower(e) { return ["W","kW","V","A","mA","VA","Wh","kWh"].includes(e.uom || ""); }
+function isUsage(e) { const k = oid(e); return !!DUR[e.uom] || k.includes("runtime") || k.includes("counter") || k.endsWith("_hours") || k.includes("days"); }
+
+function parseLogoState(e) {
+  if (!e || !e.state || e.state === "NA") return 0;
+  const s = String(e.state).toLowerCase();
+  if (s.includes("salt error") || s === "7") return 7;
+  if (s.includes("alternate") || s === "6") return 6;
+  if (s.includes("power and ready flash") || s.includes("power & ready flash") || s === "5") return 5;
+  if (s.includes("power flash") || s === "4") return 4;
+  if (s.includes("ready flash") || s === "3") return 3;
+  if (s.includes("power on & ready on") || s.includes("power & ready on") || s === "2") return 2;
+  if (s.includes("power on") || s === "1") return 1;
+  return 0;
+}
+function logoLeds(st, ph) {
+  const p = ph % 1;
+  switch (st) {
+    case 1: return [false, true];
+    case 2: return [true, true];
+    case 3: return [p < 0.5, true];
+    case 4: return [false, p < 0.5];
+    case 5: return [p < 0.5, p < 0.5];
+    case 6: return [p < 0.5, p >= 0.5];
+    case 7: return [p < 0.25, true];
+    default: return [false, false];
+  }
+}
+function logoSvg(st, label) {
+  const [g, b] = logoLeds(st, logoPhase);
+  return `<div class="logo-wrap">
+    <svg viewBox="-4 -4 134 43" style="height:28px;width:auto;overflow:visible">
+      <defs>
+        <linearGradient id="bp" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#dfe4e8"/><stop offset="45%" stop-color="#b8c1c8"/><stop offset="100%" stop-color="#8b959e"/></linearGradient>
+        <linearGradient id="cr" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#f2f5f7"/><stop offset="50%" stop-color="#9aa4ad"/><stop offset="100%" stop-color="#4e5861"/></linearGradient>
+        <radialGradient id="hb" cx="42%" cy="38%" r="65%"><stop offset="0%" stop-color="#19232c"/><stop offset="100%" stop-color="#070c10"/></radialGradient>
+      </defs>
+      <rect x="17" y="2.2" width="107" height="30.6" rx="5.5" fill="#0d1318" stroke="rgba(255,255,255,.22)" stroke-width=".9"/>
+      <rect x="28" y="4.3" width="93.5" height="26.4" rx="3.8" fill="url(#bp)"/>
+      <path d="M36 22 Q68 12 121 18 L121 30.5 L36 30.5 Z" fill="rgba(255,255,255,.16)"/>
+      <g fill="#11181e" transform="translate(3,1.2) scale(.97)">
+        <path d="M47.64 15.09V8.7h3.17v15.97h-3.17v-7.11h-3.63v7.11h-3.18V8.71H44v6.39l3.64-.01zm4 3.47c0-3.28.45-6.09 4.66-6.09s4.66 2.81 4.66 6.09c0 3.77-.55 6.41-4.66 6.41s-4.66-2.64-4.66-6.41zm6.14-.19c0-2.5-.12-3.76-1.47-3.76s-1.47 1.27-1.47 3.76c0 3.68.3 4.46 1.47 4.46s1.47-.78 1.47-4.46zm3.98-7.67l3.2-1.51v3.41h1.66v2.07h-1.66v6.45c0 .91-.02 1.51 1.02 1.51a2.2 2.2 0 0 0 .57-.05v2.07c-.55.07-1.1.12-1.66.12-2.76 0-3.13-1.93-3.13-2.68V10.7h0z"/>
+        <path d="M71.34 24.98c-2.35.18-4.4-1.58-4.59-3.93-.04-.43 0-.85.09-1.27h3c0 1.53.22 2.81 1.97 2.81 1.09.07 2.04-.72 2.15-1.81 0-4-7-1.89-7-7.79 0-2.5 1.2-4.49 5.06-4.49 3.08 0 4.74 1.11 4.73 4.49h-3.08c0-1.2-.51-2.29-1.79-2.29-.97-.01-1.76.77-1.77 1.74v.14c0 3.74 7.11 1.49 7.11 7.78.03 4.13-3.46 4.62-5.88 4.62h0zm9.58 2.9H78V12.53h2.81v1.23h.05c.44-.97 1.45-1.55 2.5-1.46 3.41 0 3.75 3.58 3.75 5.88 0 2.25-.13 6.71-3.68 6.71-1.02.14-2.02-.38-2.49-1.3l-.02 4.29h0zm3.14-9.35c0-2.23-.36-3.78-1.64-3.78-1.22 0-1.58 1.54-1.58 3.78 0 2.81.57 3.98 1.58 3.98 1.07-.01 1.64-1.17 1.64-3.98zm6.59-5.87v1.55h.05c.53-1.27 1.86-2 3.22-1.79v2.81c-2.81-.19-3.11.84-3.11 2.92v6.57h-3.2V12.66h3.04zm7.04 12.06h-2.96V12.61h2.96v12.11zm0-15.62v2.59h-2.96V9.1h2.96zm4.04 4.83h.05c.62-1.1 1.81-1.76 3.07-1.66a2.82 2.82 0 0 1 2.86 2.76v.07 9.66h-3v-8.31c0-1.07-.37-1.78-1.39-1.78s-1.59.71-1.59 1.79v8.31h-3.06V12.72h3.06v1.21h0zm12.93 9.15c-.7.75-1.67 1.2-2.7 1.22-3.46 0-3.57-3.81-3.57-6.33 0-2.45.4-5.7 3.78-5.7 1.09 0 2.09.65 2.5 1.66h.04v-1.3h2.81v11.63c0 .77-.58 3.83-4.66 3.83-1.67 0-4.09-.45-4.16-3.17h2.89c.01.68.57 1.21 1.23 1.2.91.04 1.68-.69 1.72-1.6v-.04l.12-1.4h0zm-1.55-1.05c1.07 0 1.52-1.09 1.52-3.45 0-2.45-.45-3.9-1.54-3.9-1.11 0-1.52.87-1.52 4.27 0 1.02.11 3.08 1.54 3.08h0z"/>
+      </g>
+      <circle cx="17.6" cy="17.55" r="19.2" fill="#0b1015" stroke="url(#cr)" stroke-width="1.6"/>
+      <circle cx="17.6" cy="17.55" r="17.4" fill="url(#hb)"/>
+      <g transform="translate(2.5,2.5) scale(.855)">
+        <path id="lgGreen" d="M3.73 28.5C-2.26 20.83-.89 9.75 6.78 3.75c6.97-5.44 16.9-4.87 23.2 1.33l-2.69 2.69C10.66-5.15-4.03 13.04 1.76 24.97-2.91 9.02 15.42.2 25.04 10.1l-2.64 2.59c-11.61-9.84-24.64 2.86-20.08 13-2.59-14.31 12.7-16.84 17.91-10.85-.95 1.1-2.59 2.75-2.59 2.75C9.71 10.57-.96 18.8 3.73 28.5h0z" fill="${g ? '#2ef07a' : '#3a464d'}"/>
+        <path id="lgBlue" d="M31.54 6.63c6 7.67 4.64 18.76-3.04 24.75-6.97 5.44-16.9 4.87-23.2-1.33l2.69-2.69c16.64 12.93 31.33-5.25 25.53-17.18 4.66 15.94-13.66 24.77-23.28 14.87l2.64-2.59c11.61 9.84 24.64-2.86 20.08-13 2.59 14.31-12.7 16.84-17.91 10.84.95-1.1 2.59-2.75 2.59-2.75 7.92 7.01 18.61-1.2 13.9-10.92h0z" fill="${b ? '#2eb0ff' : '#3a464d'}"/>
+      </g>
+    </svg>
+    <div class="logo-lbl">${esc(label || "Unknown")}</div>
+  </div>`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function polar(cx, cy, r, deg) { const a = (deg * Math.PI) / 180; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; }
+function arc(cx, cy, r, a0, a1) {
+  const [x0, y0] = polar(cx, cy, r, a0), [x1, y1] = polar(cx, cy, r, a1);
+  return `M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+}
+
+async function post(url) {
+  try { await fetch(url, { method: "POST" }); } catch (e) {}
+}
+function confirmRun(title, fn) {
+  document.getElementById("modalTitle").textContent = `${title}?`;
+  document.getElementById("modalBg").classList.add("open");
+  document.getElementById("modalOk").onclick = () => { document.getElementById("modalBg").classList.remove("open"); fn(); };
+}
+document.getElementById("modalCancel").onclick = () => document.getElementById("modalBg").classList.remove("open");
+
+function groupEntities() {
+  const all = Object.values(entities).filter(e => !e.is_disabled_by_default);
+  const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
+  const isHistory = e => oid(e).startsWith("history_");
+  const hist = id => all.find(e => e.domain === "text_sensor" && oid(e) === id);
+  const isSalt = e => oid(e).includes("salt") && !isHistory(e);
+  const main = (e, cat) => (e.entity_category || 0) === cat;
+
+  const saltSensors = all.filter(e => isSalt(e) && e.domain === "sensor").sort(byName);
+  const saltStatus = all.filter(e => isSalt(e) && (e.domain === "binary_sensor" || e.domain === "text_sensor")).sort(byName);
+  const saltControls = all.filter(e => isSalt(e) && ["switch","number","select"].includes(e.domain)).sort(byName);
+  const saltButtons = all.filter(e => isSalt(e) && e.domain === "button").sort(byName);
+
+  const vis = all.filter(e => !isSalt(e) && !isHistory(e));
+  const heatUpNum = vis.find(e => e.domain === "number" && oid(e) === "heat_up_temperature");
+  const vacNum = vis.find(e => e.domain === "number" && oid(e) === "vacation_temperature");
+  const etaSec = vis.find(e => e.domain === "sensor" && oid(e) === "ready_eta_seconds");
+  const etaCal = vis.find(e => e.domain === "binary_sensor" && oid(e) === "heating_rate_calibrated");
+  const etaProg = vis.find(e => e.domain === "sensor" && oid(e) === "heating_progress");
+  const readyTime = vis.find(e => e.domain === "text_sensor" && oid(e) === "ready_time");
+  const logoLight = vis.find(e => oid(e).includes("logo_light") && !oid(e).includes("raw") && (e.domain === "text_sensor" || e.domain === "sensor"));
+
+  const kind = (dom, cat=0) => vis.filter(e => e.domain === dom && main(e, cat)).sort(byName);
+  const isLight = e => oid(e).includes("light") || String(e.icon || "").includes("lightbulb");
+  const sw = kind("switch");
+  const power = [], usage = [], comfort = [];
+  for (const e of kind("sensor")) {
+    if (e === logoLight) continue;
+    if (isPower(e)) power.push(e);
+    else if (isUsage(e)) usage.push(e);
+    else comfort.push(e);
+  }
+  const config = [...vis.filter(e => (e.entity_category || 0) !== 0 && e !== heatUpNum && e !== vacNum)].sort(byName);
+  return {
+    climates: kind("climate"), fans: kind("fan"),
+    lights: sw.filter(isLight), switches: sw.filter(e => !isLight(e)),
+    selects: kind("select"),
+    numbers: kind("number").filter(e => e !== heatUpNum && e !== vacNum),
+    status: [...kind("binary_sensor"), ...kind("text_sensor").filter(e => e !== logoLight && e !== readyTime)],
+    buttons: kind("button"),
+    config, comfort, power, usage, logoLight, heatUpNum, vacNum, etaSec, etaCal, etaProg, readyTime,
+    histWater: hist("history_water_temp"), histWaterD: hist("history_water_temp_daily"), histWaterM: hist("history_water_temp_monthly"),
+    histPower: hist("history_power"), histPowerD: hist("history_power_daily"), histPowerM: hist("history_power_monthly"),
+    histEnergy: hist("history_energy"), histEnergyM: hist("history_energy_monthly"),
+    histSalt: hist("history_salt"), histSaltD: hist("history_salt_daily"), histSaltM: hist("history_salt_monthly"),
+    histHeatD: hist("history_heater_daily"), histHeatM: hist("history_heater_monthly"),
+    histHeap: hist("history_free_heap"),
+    saltSensors, saltStatus, saltControls, saltButtons,
+    saltLevel: saltSensors.find(e => oid(e) === "salt_level" || oid(e) === "salt_content"),
+    saltPower: saltControls.find(e => e.domain === "number" && (oid(e).includes("power") || oid(e).includes("output"))) || saltControls.find(e => e.domain === "number"),
+    saltBoost: saltControls.find(e => e.domain === "switch" && oid(e).includes("boost")),
+    saltSwitches: saltControls.filter(e => e.domain === "switch"),
+    saltAdj: saltControls.filter(e => e.domain !== "switch"),
+    hasSalt: (saltSensors.length + saltStatus.length + saltControls.length + saltButtons.length) > 0,
+  };
+}
+
+function sendClimateTarget(cl, dispVal, isF, immediate=false) {
+  const cVal = isF ? ((dispVal - 32) * 5 / 9) : dispVal;
+  pendingTargetC = cVal;
+  render();
+  const fire = () => {
+    post(`/climate/${encName(cl)}/set?target_temperature=${cVal.toFixed(2)}`);
+    clearTimeout(targetClearTimer);
+    targetClearTimer = setTimeout(() => { pendingTargetC = null; render(); }, 3000);
+  };
+  clearTimeout(targetDebounce);
+  if (immediate) fire();
+  else targetDebounce = setTimeout(fire, 700);
+}
+
+function renderNav(hasSalt) {
+  const visibleTabs = TABS.filter(t => t.id !== "Salt" || hasSalt);
+  if (!visibleTabs.some(t => t.id === activeTab)) activeTab = "Comfort";
+  const mk = (t, cl) => `<button type="button" class="${t.id===activeTab?"act":""}" data-tab="${t.id}">${iconSvg(t.icon, cl?20:16)}<span>${t.id}</span></button>`;
+  document.getElementById("navTop").innerHTML = visibleTabs.map(t => `<button type="button" class="nav-btn ${t.id===activeTab?"act":""}" data-tab="${t.id}">${iconSvg(t.icon,15)}<span>${t.id}</span></button>`).join("");
+  document.getElementById("navBot").innerHTML = visibleTabs.map(t => mk(t, true)).join("");
+  document.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { activeTab = b.dataset.tab; render(); });
+}
+
+function renderClimate(cl, g, isF) {
+  const toD = c => Number.isNaN(c) ? NaN : (isF ? c * 9 / 5 + 32 : c);
+  const lo = toD(num(cl.min_temp) || 26.111), hi = toD((num(cl.max_temp) > num(cl.min_temp)) ? num(cl.max_temp) : 40);
+  const step = isF ? 1 : (num(cl.step) || 0.5);
+  const snap = d => Math.max(lo, Math.min(hi, Math.round(d / step) * step));
+  const dec = (!isF && step < 1) ? 1 : 0, unit = isF ? "°F" : "°C";
+  const cur = snap(toD(num(cl.current_temperature)));
+  const tgtC = pendingTargetC !== null ? pendingTargetC : num(cl.target_temperature);
+  const tgt = Number.isNaN(tgtC) ? NaN : snap(toD(tgtC));
+
+  const act = String(cl.action || "").toUpperCase();
+  const actMeta = act === "HEATING" ? ["Heating","flame",["#FF8A4C","#E5484D"]] :
+                  act === "COOLING" ? ["Cooling","thermo",["#4FC3F7","#3D6BFD"]] :
+                  act === "IDLE" ? ["Holding temperature","check",["#26B5C4","#0E6F86"]] :
+                  ["Heater off","thermo",["#26B5C4","#0E6F86"]];
+  const cf = Number.isNaN(cur) ? NaN : Math.max(0.02, Math.min(1, (cur - lo) / (hi - lo)));
+  const tf = Number.isNaN(tgt) ? NaN : Math.max(0, Math.min(1, (tgt - lo) / (hi - lo)));
+  const heat = tempColor(cf);
+  const bg = Number.isNaN(cur) ? `linear-gradient(135deg,${actMeta[2][0]},${actMeta[2][1]})` : `linear-gradient(135deg,${lerpHex(heat,"#062530",.15)},${lerpHex(heat,"#062530",.55)})`;
+
+  // Salt dial telemetry
+  const saltV = g.saltLevel ? num(g.saltLevel.value) : NaN;
+  const zone = saltZone(saltV);
+  const pwrV = g.saltPower ? num(g.saltPower.value) : NaN;
+  const boostOn = !!(g.saltBoost && g.saltBoost.value);
+  const hasSaltPill = !Number.isNaN(saltV) || !Number.isNaN(pwrV);
+
+  // Preset targets
+  const readNum = (e, fallbackF) => {
+    if (!e) return isF ? fallbackF : (fallbackF - 32) * 5 / 9;
+    const v = num(e.value);
+    if (Number.isNaN(v)) return isF ? fallbackF : (fallbackF - 32) * 5 / 9;
+    const eF = (e.uom || (isF ? "°F" : "°C")) === "°F";
+    return eF === isF ? v : (isF ? v * 9 / 5 + 32 : (v - 32) * 5 / 9);
+  };
+  const heatUpTgt = snap(readNum(g.heatUpNum, 102));
+  const vacTgt = snap(readNum(g.vacNum, 85));
+  const tol = isF ? 0.45 : 0.2;
+  const heatUpAct = !Number.isNaN(tgt) && Math.abs(tgt - heatUpTgt) < tol;
+  const vacAct = !Number.isNaN(tgt) && Math.abs(tgt - vacTgt) < tol;
+  const heatReached = heatUpAct && !Number.isNaN(cur) && cur >= heatUpTgt - 0.05;
+  const remSec = g.etaSec ? num(g.etaSec.value) : NaN;
+  const cal = !!(g.etaCal && g.etaCal.value);
+  const prog = g.etaProg ? num(g.etaProg.value) : NaN;
+
+  let heatTitle = "Heat Up", heatSub = `${fmt(heatUpTgt, dec)}${unit}`, barPct = null;
+  if (heatReached) {
+    heatTitle = "Ready"; heatSub = `At ${fmt(heatUpTgt, dec)}${unit}`;
+  } else if (heatUpAct) {
+    heatTitle = cal ? "Ready by" : "Est. Ready";
+    if (pendingTargetC === null && !Number.isNaN(remSec) && remSec > 0) {
+      const dt = new Date(Date.now() + remSec * 1000);
+      heatSub = dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      barPct = Number.isNaN(prog) ? 10 : Math.max(8, Math.min(96, prog));
+    } else if (pendingTargetC === null && g.readyTime && g.readyTime.state && !["NA","Off","Ready"].includes(g.readyTime.state)) {
+      heatSub = g.readyTime.state;
+      barPct = Number.isNaN(prog) ? 10 : Math.max(8, Math.min(96, prog));
+    } else if (!Number.isNaN(cur) && cur < heatUpTgt) {
+      const dt = new Date(Date.now() + ((heatUpTgt - cur) / (isF ? 5 : 2.78)) * 3600000);
+      heatSub = dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+      barPct = 8;
+    }
+  }
+
+  // Dial SVG
+  const cx = 100, cy = 88, r = 74, sDeg = 135, swDeg = 270;
+  let ticks = "";
+  for (let i = 0; i <= 10; i++) {
+    const deg = sDeg + (swDeg * i) / 10;
+    const [x0,y0] = polar(cx,cy,r-12,deg), [x1,y1] = polar(cx,cy,r-(i%5===0?20:16),deg);
+    ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="rgba(255,255,255,.35)" stroke-width="1.6" stroke-linecap="round"/>`;
+  }
+  const valArc = (!Number.isNaN(cf) && cf > 0) ? `<path d="${arc(cx,cy,r,sDeg,sDeg+swDeg*cf)}" fill="none" stroke="url(#dgrad)" stroke-width="11" stroke-linecap="round" filter="url(#aglow)"/>` : "";
+  let knob = "";
+  if (!Number.isNaN(tf)) {
+    const [kx, ky] = polar(cx, cy, r, sDeg + swDeg * tf);
+    knob = `<circle cx="${kx.toFixed(1)}" cy="${(ky+1.5).toFixed(1)}" r="10.5" fill="rgba(0,0,0,.22)"/><circle cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="9" fill="#fff"/><circle cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="6" fill="none" stroke="${tempColor(tf)}" stroke-width="2.6"/>`;
+  }
+
+  const online = connState === "online" && !Number.isNaN(tgt);
+  const lSt = parseLogoState(g.logoLight);
+  const logoHtml = g.logoLight ? logoSvg(lSt, g.logoLight.state) : `<div style="font-size:13px;font-weight:600;opacity:.85">${esc(cl.name)}</div>`;
+
+  const modes = (cl.modes || []).filter(m => ["HEAT","COOL","HEAT_COOL","OFF"].includes(String(m).toUpperCase()));
+  const modeMap = { HEAT:"Heat", COOL:"Chill", HEAT_COOL:"Auto", OFF:"Off" };
+  const presets = (cl.presets || []).filter(p => ["BOOST","ECO"].includes(String(p).toUpperCase()));
+  const presetMap = { BOOST:"Boost", ECO:"Saver" };
+
+  return `<section class="climate" style="background:${bg}">
+    <div class="c-head">
+      <div class="pill">${iconSvg(actMeta[1],15)}<span>${actMeta[0]}</span></div>
+      ${logoHtml}
+    </div>
+    <div id="dialBox" class="dial-box" data-min="${lo}" data-max="${hi}" data-step="${step}" data-isf="${isF?1:0}" data-cl="${esc(cl.name)}">
+      <svg viewBox="0 0 200 176" class="dial-svg">
+        <defs>
+          <linearGradient id="dgrad" x1="15%" y1="85%" x2="85%" y2="85%"><stop offset="0%" stop-color="#3D7BFF"/><stop offset="35%" stop-color="#22C3D6"/><stop offset="72%" stop-color="#FFB347"/><stop offset="100%" stop-color="#FF5A36"/></linearGradient>
+          <filter id="aglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <path d="${arc(cx,cy,r,sDeg,sDeg+swDeg)}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="11" stroke-linecap="round"/>
+        ${ticks}${valArc}${knob}
+      </svg>
+      <div class="dial-center ${hasSaltPill||boostOn?'':'plain'}">
+        <div class="temp-big">${fmt(cur,dec)}${unit}</div>
+        <div class="temp-sub">Water</div>
+      </div>
+      ${hasSaltPill ? `<button type="button" id="dialSaltBtn" class="salt-pill">
+        ${iconSvg("salt",13)}
+        ${!Number.isNaN(saltV) ? `${zone?`<span class="salt-dot" style="background:${zone.color}"></span>`:""}<span>${Math.round(saltV)}${zone?` · ${zone.label}`:""}</span>` : ""}
+        ${(!Number.isNaN(saltV) && !Number.isNaN(pwrV)) ? `<span class="salt-div"></span>` : ""}
+        ${!Number.isNaN(pwrV) ? `<span>Pwr ${Math.round(pwrV)}</span>` : ""}
+      </button>` : ""}
+      ${boostOn ? `<button type="button" id="dialBoostBtn" class="boost-pill">${iconSvg("bolt",11)}<span>Boost On</span></button>` : ""}
+      <div class="dial-min">${fmt(lo,dec)}°</div>
+      <div class="dial-max">${fmt(hi,dec)}°</div>
+    </div>
+    <div class="stepper">
+      <button type="button" id="stepMinus" class="rnd" ${online?"":"disabled"}>−</button>
+      <div>
+        <div class="set-val">${fmt(tgt,dec)}${unit}</div>
+        <div class="set-lbl">${pendingTargetC!==null?"Setting…":"Set to"}</div>
+      </div>
+      <button type="button" id="stepPlus" class="rnd" ${online?"":"disabled"}>+</button>
+    </div>
+    <div class="presets">
+      <button type="button" id="heatUpBtn" class="preset ${heatUpAct?"act":""}" style="${heatUpAct?`color:${heatReached?"#17874B":"#C93E24"}`:""}" ${online?"":"disabled"}>
+        <span class="p-ico">${iconSvg(heatReached?"check":"flame",16)}</span>
+        <span class="p-txt"><div class="p-t">${heatTitle}</div><div class="p-s">${esc(heatSub)}</div></span>
+        ${barPct!==null?`<span class="p-bar"><span class="p-fill" style="width:${barPct}%;background:#E5484D"></span></span>`:""}
+      </button>
+      <button type="button" id="vacBtn" class="preset ${vacAct?"act":""}" style="${vacAct?"color:#175EA8":""}" ${online?"":"disabled"}>
+        <span class="p-ico">${iconSvg("plane",16)}</span>
+        <span class="p-txt"><div class="p-t">Vacation</div><div class="p-s">${vacAct?"On · ":""}${fmt(vacTgt,dec)}${unit}</div></span>
+      </button>
+    </div>
+    ${modes.length>1 ? `<div class="seg">${modes.map(m => `<button type="button" class="${String(cl.mode||"").toUpperCase()===String(m).toUpperCase()?"act":""}" data-mode="${esc(m)}">${modeMap[String(m).toUpperCase()]||m}</button>`).join("")}</div>` : ""}
+    ${(presets.length>0 && String(cl.mode||"").toUpperCase()!=="COOL") ? `<div class="seg">${presets.map(p => `<button type="button" class="${String(cl.preset||"").toUpperCase()===String(p).toUpperCase()?"act":""}" data-preset="${esc(p)}">${presetMap[String(p).toUpperCase()]||p}</button>`).join("")}</div>` : ""}
+  </section>`;
+}
+
+function renderBigTile(e, isFan) {
+  const on = !!e.value, accent = accentFor(e);
+  const lbl = isFan ? (!on ? "Off" : ((e.speed_count||1) <= 1 ? "On" : (e.speed_level <= 1 ? "Low" : "High"))) : (e.state ? (on ? "On" : "Off") : "—");
+  const bg = on ? `linear-gradient(135deg,${accent},${lerpHex(accent,"#000000",.28)})` : "var(--card)";
+  return `<button type="button" class="big-tile" style="background:${bg};color:${on?"#fff":"var(--fg)"};${on?`box-shadow:0 8px 24px ${accent}55;border-color:transparent`:""}" data-tile="${esc(e.id)}">
+    <div class="big-top">
+      <span class="ico-badge" style="background:${on?"rgba(255,255,255,.24)":accent+"24"};color:${on?"#fff":accent}">${iconSvg(entityIcon(e),18)}</span>
+      <span style="font-size:12px;font-weight:700;opacity:.8">${on?"ON":"OFF"}</span>
+    </div>
+    <div><div class="bt-name">${esc(e.name)}</div><div class="bt-lbl">${lbl}</div></div>
+  </button>`;
+}
+
+function renderNumberRow(e, asCard) {
+  const min = num(e.min_value) || 0, max = num(e.max_value) > min ? num(e.max_value) : min + 1, step = num(e.step) || 1;
+  const raw = draggingNumber[e.id] !== undefined ? draggingNumber[e.id] : num(e.value);
+  const val = Number.isNaN(raw) ? min : Math.max(min, Math.min(max, raw));
+  const txt = `${step < 1 ? val.toFixed(1) : val.toFixed(0)}${e.uom||""}`;
+  const accent = accentFor(e), dis = connState !== "online" ? "disabled" : "";
+  if (asCard) {
+    return `<div class="card num-card">
+      <div class="num-head">
+        <span class="ico-badge" style="background:${accent}24;color:${accent};width:32px;height:32px">${iconSvg(entityIcon(e),16)}</span>
+        <span class="row-t" style="font-weight:600">${esc(e.name)}</span>
+        <span class="num-val" style="color:${accent}" id="nv-${esc(e.id)}">${txt}</span>
+      </div>
+      <input class="slider" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-num="${esc(e.id)}" ${dis}>
+    </div>`;
+  }
+  return `<div class="row">
+    <span style="color:${accent}">${iconSvg(entityIcon(e),18)}</span>
+    <div class="row-main"><div class="row-t">${esc(e.name)}</div><input class="slider" type="range" min="${min}" max="${max}" step="${step}" value="${val}" data-num="${esc(e.id)}" ${dis}></div>
+    <span class="row-right" id="nv-${esc(e.id)}">${txt}</span>
+  </div>`;
+}
+
+function renderSensors(list) {
+  return `<div class="grid grid-wide">${list.map(e => {
+    const accent = accentFor(e);
+    return `<div class="card sensor-card">
+      <span class="ico-badge" style="background:${accent}24;color:${accent};width:32px;height:32px">${iconSvg(entityIcon(e),16)}</span>
+      <div class="sensor-val">${esc(sensorText(e))}</div>
+      <div class="sensor-name">${esc(e.name)}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+function renderSaltGauge(e, statusRows) {
+  const v = num(e.value), z = saltZone(v);
+  const cx = 100, cy = 88, r = 74, sDeg = 135, swDeg = 270;
+  let paths = "";
+  for (let i = 0; i < SALT_ZONES.length; i++) {
+    const [z0, z1, , col] = SALT_ZONES[i];
+    const a0 = sDeg + swDeg * (z0 / 120) + (z0 > 0 ? 1.5 : 0);
+    const a1 = sDeg + swDeg * (z1 / 120) - (z1 < 120 ? 1.5 : 0);
+    paths += `<path d="${arc(cx,cy,r,a0,a1)}" fill="none" stroke="${col}" stroke-opacity="0.25" stroke-width="11"/>`;
+    if (!Number.isNaN(v) && v > z0) {
+      const aEnd = Math.min(a1, sDeg + swDeg * (Math.min(120, v) / 120));
+      if (aEnd > a0) paths += `<path d="${arc(cx,cy,r,a0,aEnd)}" fill="none" stroke="${col}" stroke-width="11"/>`;
+    }
+  }
+  let knob = "";
+  if (z) {
+    const [kx, ky] = polar(cx, cy, r, sDeg + swDeg * Math.max(0, Math.min(1, v / 120)));
+    knob = `<circle cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="8.5" fill="#fff"/><circle cx="${kx.toFixed(1)}" cy="${ky.toFixed(1)}" r="5.5" fill="none" stroke="${z.color}" stroke-width="2.5"/>`;
+  }
+  return `<div class="card salt-hero">
+    <div style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600"><span style="color:${z?z.color:"var(--aqua)"}">${iconSvg("salt",16)}</span><span>${esc(e.name)}</span></div>
+    <div style="position:relative;max-width:256px;margin:6px auto 0;aspect-ratio:1.15">
+      <svg viewBox="0 0 200 176" class="dial-svg">${paths}${knob}</svg>
+      <div class="dial-center plain">
+        <div class="temp-big" style="font-size:52px">${fmt(v,0)}</div>
+        ${z ? `<div class="salt-badge" style="background:${z.color}28;color:${z.color}">${z.label}</div>` : ""}
+      </div>
+      <div class="dial-min">0</div><div class="dial-max">120</div>
+    </div>
+    ${statusRows.map(r => renderStatusRow(r)).join("")}
+  </div>`;
+}
+
+function renderStatusRow(e) {
+  const val = e.domain === "binary_sensor" ? (e.value ? "Yes" : "No") : (e.state || "—");
+  return `<div class="row"><span style="color:var(--muted)">${iconSvg(entityIcon(e),17)}</span><div class="row-main"><div class="row-t">${esc(e.name)}</div></div><span class="row-right" style="color:var(--muted);font-size:13.5px">${esc(val)}</span></div>`;
+}
+
+function renderGenericRow(e) {
+  const dis = connState !== "online" ? "disabled" : "";
+  if (e.domain === "switch") {
+    const on = !!e.value, accent = accentFor(e);
+    return `<div class="row"><span style="color:${accent}">${iconSvg(entityIcon(e),18)}</span><div class="row-main"><div class="row-t">${esc(e.name)}</div></div><button type="button" class="sw ${on?"on":""}" style="${on?`background:${accent}`:""}" data-sw="${esc(e.id)}" ${dis}></button></div>`;
+  }
+  if (e.domain === "number") return renderNumberRow(e, false);
+  if (e.domain === "select") {
+    const opts = e.option || [];
+    return `<div class="row"><span style="color:var(--muted)">${iconSvg(entityIcon(e),18)}</span><div class="row-main"><div class="row-t">${esc(e.name)}</div></div><select class="sel" data-sel="${esc(e.id)}" ${dis}>${opts.map(o => `<option value="${esc(o)}" ${o===e.state?"selected":""}>${esc(o)}</option>`).join("")}</select></div>`;
+  }
+  if (e.domain === "button") {
+    return `<div class="row"><span style="color:var(--muted)">${iconSvg(entityIcon(e),18)}</span><div class="row-main"><div class="row-t">${esc(e.name)}</div></div><button type="button" class="btn-out" data-btn="${esc(e.id)}" ${dis}>Run</button></div>`;
+  }
+  if (e.domain === "sensor") {
+    return `<div class="row"><span style="color:var(--muted)">${iconSvg(entityIcon(e),17)}</span><div class="row-main"><div class="row-t">${esc(e.name)}</div></div><span class="row-right" style="color:var(--muted);font-size:13.5px">${esc(sensorText(e))}</span></div>`;
+  }
+  return renderStatusRow(e);
+}
+
+const chartRanges = {};
+let settingsSubTab = "general", historyTf = "31d";
+const _tipData = {};
+const _MC_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function _buildParsedSeries(prefix, hours, isMonthly, isDaily, endDate, values, spanOverride=null) {
+  const nn = values.filter(v => v !== null);
+  if (!nn.length) return null;
+  let span = spanOverride;
+  if (!span) {
+    if (isMonthly) span = (values.length >= 12 && values.length % 12 === 0) ? `${values.length / 12}yr` : `${values.length}mo`;
+    else if (isDaily) span = `${values.length}d`;
+    else { const totH = values.length * hours; span = totH >= 24 ? `${Math.round(totH / 24)}d` : `${totH}h`; }
+  }
+  let latest = null;
+  for (let i = values.length - 1; i >= 0; i--) { if (values[i] !== null) { latest = values[i]; break; } }
+  const sum = nn.reduce((a, b) => a + b, 0);
+  const avg = sum / nn.length;
+  return { prefix, hours, isMonthly, isDaily, endDate, span, values, min: Math.min(...nn), max: Math.max(...nn), sum, avg, latest };
+}
+
+function parseHistory(raw) {
+  const s = String(raw || "").trim();
+  const c = s.indexOf(":");
+  if (c <= 0) return null;
+  const rawPrefix = s.slice(0, c).trim(), body = s.slice(c + 1);
+  if (!body.trim()) return null;
+  let prefix = rawPrefix, endDate = null;
+  const at = rawPrefix.indexOf("@");
+  if (at > 0) {
+    prefix = rawPrefix.slice(0, at).trim();
+    const parts = rawPrefix.slice(at + 1).trim().split("-").map(x => parseInt(x, 10));
+    if (parts.length === 3 && parts.every(Number.isFinite)) endDate = { y: parts[0], m: parts[1], d: parts[2] };
+    else if (parts.length === 2 && parts.every(Number.isFinite)) endDate = { y: parts[0], m: parts[1], d: 1 };
+  }
+  const isMonthly = prefix.endsWith("mo"), isDaily = !isMonthly && prefix.endsWith("d");
+  const hours = isMonthly ? (parseInt(prefix, 10) || 1) * 720 : (isDaily ? (parseInt(prefix, 10) || 1) * 24 : (parseInt(prefix, 10) || 6));
+  const values = body.split(",").map(t => { const v = parseFloat(t.trim()); return Number.isFinite(v) ? v : null; });
+  return _buildParsedSeries(prefix, hours, isMonthly, isDaily, endDate, values);
+}
+
+function sliceLastN(h, n) {
+  if (!h || h.values.length <= n) return h;
+  return _buildParsedSeries(h.prefix, h.hours, h.isMonthly, h.isDaily, h.endDate, h.values.slice(h.values.length - n));
+}
+
+function sliceThisMonth(h) {
+  if (!h || !h.isDaily || !h.endDate) return h;
+  const e = h.endDate, len = h.values.length;
+  let first = len;
+  for (let i = 0; i < len; i++) {
+    const dt = new Date(e.y, e.m - 1, e.d - (len - 1 - i));
+    if (dt.getFullYear() === e.y && dt.getMonth() === (e.m - 1)) { first = i; break; }
+  }
+  if (first >= len) return h;
+  return _buildParsedSeries(h.prefix, h.hours, h.isMonthly, h.isDaily, h.endDate, h.values.slice(first), "MTD") || h;
+}
+
+function historyAxisLabel(h, idx) {
+  const off = h.values.length - 1 - idx, e = h.endDate;
+  if (h.isMonthly) {
+    if (e) {
+      const tm = e.y * 12 + (e.m - 1) - off;
+      const m = ((tm % 12) + 12) % 12, y = Math.floor(tm / 12);
+      const mon = _MC_MONTHS[m];
+      return h.values.length > 12 ? `${mon} '${String(y % 100).padStart(2, "0")}` : mon;
+    }
+    return off === 0 ? "Now" : `-${off}m`;
+  }
+  if (h.isDaily) {
+    if (e) {
+      const dt = new Date(e.y, e.m - 1, e.d - off);
+      return `${_MC_MONTHS[dt.getMonth()]} ${dt.getDate()}`;
+    }
+    return off === 0 ? "Today" : `-${off}d`;
+  }
+  if (off === 0) return "Now";
+  const hrs = off * h.hours;
+  return hrs >= 24 ? `-${Math.round(hrs / 24)}d` : `-${hrs}h`;
+}
+
+function _renderMicrochartBody(h, gid, { title, subtitle="", icon, accent, unit="", decimals=0, bars=false, showTotal=false, spanOverride=null, saltBand=false, splitAt=null, tabsHtml="" }) {
+  const fmtV = v => v === null || v === undefined ? "—" : `${decimals === 0 ? Math.round(v) : v.toFixed(decimals)}${unit ? " " + unit : ""}`;
+  let body = `<div style="height:54px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Collecting history…</div>`;
+  if (h) {
+    const W = 300, H = 54, pad = 4, dH = H - pad * 2;
+    let lo = h.min, hi = h.max;
+    if (bars && lo > 0) lo = 0;
+    if (saltBand) { lo = Math.min(lo, 20); hi = Math.max(hi, 85); }
+    let rng = hi - lo;
+    if (rng < 1e-6) { rng = 1; if (!bars) lo -= 0.5; }
+    const yAt = v => pad + (1 - Math.max(0, Math.min(1, (v - lo) / rng))) * dH;
+    let shapes = `<line x1="0" y1="${H-pad}" x2="${W}" y2="${H-pad}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
+    if (saltBand) {
+      const yT = yAt(Math.min(hi, 80)), yB = yAt(Math.max(lo, 40));
+      if (yB > yT) shapes += `<rect x="0" y="${yT.toFixed(1)}" width="${W}" height="${(yB-yT).toFixed(1)}" fill="#22c55e" fill-opacity="0.12"/>`;
+    }
+    const n = h.values.length;
+    if (splitAt && n > splitAt) {
+      const sx = bars ? (splitAt / n) * W : (splitAt / (n - 1)) * W;
+      shapes += `<line x1="${sx.toFixed(1)}" y1="${pad}" x2="${sx.toFixed(1)}" y2="${H-pad}" stroke="rgba(255,255,255,.26)" stroke-dasharray="3 3" stroke-width="1"/>`;
+    }
+    _tipData[gid] = { h, fmtV };
+    if (bars) {
+      const sw = W / Math.max(1, n), bw = Math.max(2, sw * 0.64);
+      h.values.forEach((v, i) => {
+        if (v === null) return;
+        const frac = Math.max(0.05, Math.min(1, (v - lo) / rng)), bh = frac * dH;
+        const x = i * sw + (sw - bw) / 2, y = pad + (dH - bh);
+        shapes += `<rect class="mc-pt" data-tip="${esc(gid)}:${i}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${accent}" fill-opacity="${i===n-1?1:0.55}"/>`;
+      });
+    } else {
+      const xAt = i => n <= 1 ? W / 2 : (i / (n - 1)) * W;
+      let defs = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${accent}" stop-opacity="0.30"/><stop offset="100%" stop-color="${accent}" stop-opacity="0"/></linearGradient></defs>`;
+      let seg = [], lastPt = null;
+      const flush = () => {
+        if (seg.length >= 2) {
+          const pts = seg.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+          const area = `M ${seg[0][0].toFixed(1)} ${seg[0][1].toFixed(1)} ` + seg.slice(1).map(p => `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ") + ` L ${seg[seg.length-1][0].toFixed(1)} ${H-pad} L ${seg[0][0].toFixed(1)} ${H-pad} Z`;
+          shapes += `<path d="${area}" fill="url(#${gid})"/><polyline fill="none" stroke="${accent}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>`;
+        } else if (seg.length === 1) {
+          shapes += `<circle cx="${seg[0][0].toFixed(1)}" cy="${seg[0][1].toFixed(1)}" r="3.5" fill="${accent}"/>`;
+        }
+        seg = [];
+      };
+      h.values.forEach((v, i) => {
+        if (v === null) { flush(); return; }
+        const pt = [xAt(i), yAt(v)];
+        seg.push(pt);
+        lastPt = pt;
+      });
+      flush();
+      if (lastPt) shapes += `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3.8" fill="#fff"/><circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="2.3" fill="${accent}"/>`;
+      const cw = W / Math.max(1, n);
+      h.values.forEach((v, i) => {
+        if (v === null) return;
+        const hx = Math.max(0, xAt(i) - cw / 2);
+        shapes += `<rect class="mc-pt" data-tip="${esc(gid)}:${i}" x="${hx.toFixed(1)}" y="0" width="${cw.toFixed(1)}" height="${H}" fill="transparent"/>`;
+      });
+      shapes = defs + shapes;
+    }
+    const axHtml = h.values.length >= 2 ? `<div class="mc-ax"><span>${esc(historyAxisLabel(h, 0))}</span>${h.values.length >= 5 ? `<span>${esc(historyAxisLabel(h, Math.floor(h.values.length / 2)))}</span>` : ""}<span>${esc(historyAxisLabel(h, h.values.length - 1))}</span></div>` : "";
+    const leftStat = showTotal ? `Avg ${esc(fmtV(h.avg))}` : `Min ${esc(fmtV(h.min))}`;
+    body = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="mc-svg">${shapes}</svg>${axHtml}
+      <div class="mc-ft"><span>${leftStat}</span><span>${h.values.length} × ${esc(h.prefix)}</span><span>Max ${esc(fmtV(h.max))}</span></div>`;
+  }
+  const heroVal = h ? fmtV(showTotal ? h.sum : h.latest) : "—";
+  const badge = spanOverride || (h ? h.span : "");
+  return `<div class="card mc">
+    <div class="mc-hd">
+      <span class="ico-badge" style="background:${accent}24;color:${accent};width:28px;height:28px">${iconSvg(icon,14)}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</div>
+        ${subtitle ? `<div class="mc-sub">${esc(subtitle)}</div>` : ""}
+      </div>
+      ${badge?`<span class="mc-badge" style="background:${accent}24;color:${accent}">${esc(badge)}</span>`:""}
+      <span class="mc-val">${esc(heroVal)}</span>
+    </div>${tabsHtml}${body}
+  </div>`;
+}
+
+function renderMicrochart(entity, opts) {
+  if (!entity) return "";
+  return _renderMicrochartBody(parseHistory(entity.state), `mcg_${oid(entity)}`, opts);
+}
+
+function renderTabbedMicrochart(chartId, tabs, opts) {
+  if (!tabs.some(t => t.present)) return "";
+  let key = chartRanges[chartId];
+  if (!key || !tabs.some(t => t.key === key)) {
+    const firstWithData = tabs.find(t => t.series);
+    key = firstWithData ? firstWithData.key : tabs[0].key;
+  }
+  const active = tabs.find(t => t.key === key) || tabs[0];
+  const tabsHtml = `<div class="mc-tabs">${tabs.map(t => {
+    const act = t.key === active.key;
+    const st = act ? ` style="background:${opts.accent}33;border-color:${opts.accent};color:${opts.accent}"` : "";
+    return `<button type="button" class="mc-tab${act?" act":""}" data-cr="${esc(chartId)}:${esc(t.key)}"${st}>${esc(t.label)}</button>`;
+  }).join("")}</div>`;
+  return _renderMicrochartBody(active.series, `mcg_${chartId}_${active.key}`, { ...opts, tabsHtml });
+}
+
+function avgTabsFor(recent, daily, monthly) {
+  const mSeries = monthly ? parseHistory(monthly.state) : null;
+  return [
+    { key: "14d", label: "14d", present: !!recent, series: recent ? parseHistory(recent.state) : null },
+    { key: "31d", label: "31d", present: !!daily, series: daily ? parseHistory(daily.state) : null },
+    { key: "1yr", label: "1yr", present: !!monthly, series: sliceLastN(mSeries, 12) },
+    { key: "2yr", label: "2yr", present: !!monthly, series: mSeries },
+  ];
+}
+
+function totalTabsFor(daily, monthly) {
+  const dSeries = daily ? parseHistory(daily.state) : null;
+  const mSeries = monthly ? parseHistory(monthly.state) : null;
+  return [
+    { key: "mtd", label: "Month", present: !!daily, series: sliceThisMonth(dSeries) },
+    { key: "31d", label: "31d", present: !!daily, series: dSeries },
+    { key: "1yr", label: "1yr", present: !!monthly, series: sliceLastN(mSeries, 12) },
+    { key: "2yr", label: "2yr", present: !!monthly, series: mSeries },
+  ];
+}
+
+function renderSettingsHistory(g, isF) {
+  const tfOpts = [
+    ["mtd", "Daily · MTD", "Current calendar month (1d buckets)", "MTD"],
+    ["31d", "Daily · 31d", "Rolling 31 days (1d buckets)", "31d"],
+    ["1yr", "Monthly · 1yr", "Trailing 12 months (1mo rollups)", "1yr"],
+    ["2yr", "Annual · 2yr", "24-month annual trend (1mo rollups)", "2yr"],
+    ["14d", "Recent · 14d (6h)", "Last 14 days (6h buckets; Energy/Heater in 1d)", "14d · 6h"],
+  ];
+  const activeMeta = tfOpts.find(t => t[0] === historyTf) || tfOpts[1];
+  const parseE = e => e ? parseHistory(e.state) : null;
+  const pickAvg = (r, d, m) => {
+    const ds = parseE(d), ms = parseE(m);
+    if (historyTf === "mtd") return sliceThisMonth(ds) || ds;
+    if (historyTf === "31d") return ds;
+    if (historyTf === "1yr") return sliceLastN(ms, 12);
+    if (historyTf === "2yr") return ms;
+    return parseE(r);
+  };
+  const pickTot = (d, m) => {
+    const ds = parseE(d), ms = parseE(m);
+    if (historyTf === "mtd") return sliceThisMonth(ds) || ds;
+    if (historyTf === "31d") return ds;
+    if (historyTf === "1yr") return sliceLastN(ms, 12);
+    if (historyTf === "2yr") return ms;
+    return sliceLastN(ds, 14);
+  };
+
+  const eH = pickTot(g.histEnergy, g.histEnergyM);
+  const hH = pickTot(g.histHeatD, g.histHeatM);
+  const wH = pickAvg(g.histWater, g.histWaterD, g.histWaterM);
+  const pH = pickAvg(g.histPower, g.histPowerD, g.histPowerM);
+  const sH = pickAvg(g.histSalt, g.histSaltD, g.histSaltM);
+  const heapH = parseE(g.histHeap);
+
+  const avgSpan = activeMeta[3], totSpan = historyTf === "14d" ? "14d (1d)" : avgSpan;
+  const split = historyTf === "2yr" ? 12 : null;
+  const perU = (historyTf === "1yr" || historyTf === "2yr") ? "mo" : "day";
+  const fmtN = (v, dec, u="") => (v === null || v === undefined) ? "—" : `${dec === 0 ? Math.round(v) : v.toFixed(dec)}${u ? " " + u : ""}`;
+  const tUnit = isF ? "°F" : "°C";
+  const sZone = (sH && sH.latest !== null) ? saltZone(sH.latest) : null;
+
+  const pills = `<div class="mc-tabs" style="margin-top:0">${tfOpts.map(([k, lbl]) => {
+    const act = k === historyTf;
+    const st = act ? ` style="background:rgba(79,227,235,.22);border-color:rgba(79,227,235,.7);color:var(--aqua)"` : "";
+    return `<button type="button" class="mc-tab${act?" act":""}" data-htf="${k}"${st}>${lbl}</button>`;
+  }).join("")}</div><div style="font-size:11px;color:var(--muted);margin-top:6px">${esc(activeMeta[2])}</div>`;
+
+  const kpis = `<div class="kpi-grid">
+    <div class="card kpi"><div class="kpi-l">Total Energy</div><div class="kpi-v">${esc(fmtN(eH?.sum, 1, "kWh"))}</div><div class="kpi-s">${eH ? `Avg ${esc(fmtN(eH.avg, 1, "kWh"))}/${perU}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Heater Runtime</div><div class="kpi-v">${esc(fmtN(hH?.sum, 1, "h"))}</div><div class="kpi-s">${hH ? `Avg ${esc(fmtN(hH.avg, 1, "h"))}/${perU}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Water Temp</div><div class="kpi-v">${esc(fmtN(wH?.avg, 1, tUnit))}</div><div class="kpi-s">${wH ? `${wH.min.toFixed(1)}–${wH.max.toFixed(1)}${tUnit}` : "Collecting…"}</div></div>
+    <div class="card kpi"><div class="kpi-l">Salt Level</div><div class="kpi-v">${sH ? Math.round(sH.latest) : "—"}</div><div class="kpi-s" style="color:${sZone?sZone.color:"var(--muted)"}">${sZone ? esc(sZone.label) : "Collecting…"}</div></div>
+  </div>`;
+
+  const cards = `<div class="hist-grid">
+    ${_renderMicrochartBody(eH, "sh_energy", { title: "Energy Consumption", subtitle: "Pumps + Controller + Heater", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: (eH && eH.isMonthly) ? 1 : 2, bars: true, showTotal: true, spanOverride: totSpan, splitAt: split })}
+    ${_renderMicrochartBody(hH, "sh_heater", { title: "Heater Runtime", subtitle: "Active heating hours", icon: "flame", accent: "#FF8A4C", unit: "h", decimals: 1, bars: true, showTotal: true, spanOverride: totSpan, splitAt: split })}
+    ${_renderMicrochartBody(wH, "sh_water", { title: "Water Temperature", subtitle: "Average water temp", icon: "thermo", accent: "#FF8A4C", unit: tUnit, decimals: 1, spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(pH, "sh_power", { title: "Total Power Draw", subtitle: "Combined electrical load", icon: "bolt", accent: "#E8A317", unit: "W", spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(sH, "sh_salt", { title: "Salt Level", subtitle: "Optimal band: 40–80", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD", saltBand: true, spanOverride: avgSpan, splitAt: split })}
+    ${_renderMicrochartBody(heapH, "sh_heap", { title: "ESP32 Free Heap", subtitle: "Collected at 14d @ 6h", icon: "tune", accent: "#4FE3EA", unit: "KB", spanOverride: "14d · 6h" })}
+  </div>`;
+
+  return `${pills}${kpis}${cards}`;
+}
+
+function render() {
+  const dot = document.getElementById("connDot"), ctxt = document.getElementById("connTxt");
+  dot.style.background = connState === "online" ? "#22c55e" : (connState === "offline" ? "#ef4444" : "#f59e0b");
+  ctxt.textContent = connState === "online" ? "Online" : (connState === "offline" ? "Offline" : "Connecting");
+  document.getElementById("spaName").textContent = spaTitle;
+
+  const g = groupEntities();
+  renderNav(g.hasSalt);
+  const all = Object.values(entities);
+  const isF = all.some(e => e.domain === "sensor" && e.uom === "°F");
+  let html = "";
+  if (connState !== "online") {
+    html += `<div class="banner"><span>${connState==="offline"?"Not connected to hot tub":"Connecting to live updates…"}</span><button type="button" class="btn-out" id="retryBtn">Retry</button></div>`;
+  }
+
+  if (activeTab === "Comfort") {
+    html += g.climates.map(c => renderClimate(c, g, isF)).join("");
+    if (g.fans.length || g.lights.length) {
+      html += `<div class="sec">${g.fans.length&&g.lights.length?"Jets & Lights":(g.fans.length?"Jets":"Lights")}</div>`;
+      html += `<div class="grid grid-wide">${g.fans.map(f => renderBigTile(f, true)).join("")}${g.lights.map(l => renderBigTile(l, false)).join("")}</div>`;
+    }
+    if (g.switches.length || g.saltControls.length) {
+      html += `<div class="sec">Spa settings</div>`;
+      html += g.saltAdj.map(e => e.domain === "number" ? renderNumberRow(e, true) : `<div class="card" style="margin-bottom:12px">${renderGenericRow(e)}</div>`).join("");
+      html += `<div class="grid grid-wide">${[...g.saltSwitches, ...g.switches].map(e => renderBigTile(e, false)).join("")}</div>`;
+    }
+    if (g.comfort.length || g.histWater || g.histWaterD || g.histWaterM) html += `<div class="sec">Water</div>${g.comfort.length ? renderSensors(g.comfort) : ""}${renderTabbedMicrochart("water", avgTabsFor(g.histWater, g.histWaterD, g.histWaterM), { title: "Water temperature", icon: "thermo", accent: "#FF8A4C", unit: isF ? "°F" : "°C", decimals: 1 })}`;
+  } else if (activeTab === "Power") {
+    const hasP = g.power.length || g.histPower || g.histPowerD || g.histPowerM || g.histEnergy || g.histEnergyM;
+    html += hasP ? `<div class="sec">Power</div>${renderTabbedMicrochart("power", avgTabsFor(g.histPower, g.histPowerD, g.histPowerM), { title: "Total power draw", icon: "bolt", accent: "#E8A317", unit: "W" })}${renderTabbedMicrochart("energy", totalTabsFor(g.histEnergy, g.histEnergyM), { title: "Energy consumption", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: 1, bars: true, showTotal: true })}${g.power.length ? `<div style="margin-top:10px">${renderSensors(g.power)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No power readings configured.</div>`;
+  } else if (activeTab === "Usage") {
+    const hasU = g.usage.length || g.histHeatD || g.histHeatM;
+    html += hasU ? `<div class="sec">Runtime & timers</div>${renderTabbedMicrochart("heater", totalTabsFor(g.histHeatD, g.histHeatM), { title: "Heater runtime", icon: "flame", accent: "#FF8A4C", unit: "h", decimals: 1, bars: true, showTotal: true })}${g.usage.length ? `<div style="margin-top:10px">${renderSensors(g.usage)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No runtime counters configured.</div>`;
+  } else if (activeTab === "Salt") {
+    const others = g.saltSensors.filter(e => e !== g.saltLevel);
+    if (g.saltLevel) html += renderSaltGauge(g.saltLevel, g.saltStatus);
+    else if (g.saltStatus.length) html += `<div class="card">${g.saltStatus.map(renderStatusRow).join("")}</div>`;
+    const sHist = g.histSalt ? parseHistory(g.histSalt.state) : null;
+    const sZone = sHist && sHist.latest !== null ? saltZone(sHist.latest) : null;
+    html += renderTabbedMicrochart("salt", avgTabsFor(g.histSalt, g.histSaltD, g.histSaltM), { title: "Salt level history", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD" });
+    if (others.length) html += `<div class="sec">Cartridge & generator</div>${renderSensors(others)}`;
+    if (g.saltControls.length) html += `<div class="sec">Controls</div><div class="card">${g.saltControls.map(renderGenericRow).join("")}</div>`;
+    if (g.saltButtons.length) html += `<div class="sec">Maintenance</div><div class="card">${g.saltButtons.map(renderGenericRow).join("")}</div>`;
+  } else if (activeTab === "Settings") {
+    html += `<div class="seg">
+      <button type="button" data-stab="general" class="${settingsSubTab==="general"?"act":""}">${iconSvg("tune",15)}<span>General</span></button>
+      <button type="button" data-stab="history" class="${settingsSubTab==="history"?"act":""}">${iconSvg("bolt",15)}<span>History</span></button>
+    </div>`;
+    if (settingsSubTab === "history") {
+      html += renderSettingsHistory(g, isF);
+    } else {
+      if (g.heatUpNum || g.vacNum) {
+        html += `<div class="sec">Temperature presets</div><div class="card">`;
+        for (const [e, title, icon, color] of [[g.heatUpNum,"Heat Up temperature","flame","#F0643C"],[g.vacNum,"Vacation temperature","plane","#1FA2B4"]]) {
+          if (!e) continue;
+          const v = num(e.value), min = num(e.min_value)||79, max = num(e.max_value)||104, stp = num(e.step)||1, dis = connState !== "online" ? "disabled" : "";
+          html += `<div class="row">
+            <span class="ico-badge" style="background:${color}24;color:${color};width:32px;height:32px">${iconSvg(icon,16)}</span>
+            <div class="row-main"><div class="row-t">${title}</div><div class="row-s">Synced on hot tub</div></div>
+            <div class="row-right">
+              <button type="button" class="step-btn" data-pdec="${esc(e.id)}" ${dis||v<=min?"disabled":""}>−</button>
+              <strong style="min-width:44px;text-align:center">${fmt(v,0)}${e.uom||"°F"}</strong>
+              <button type="button" class="step-btn" data-pinc="${esc(e.id)}" ${dis||v>=max?"disabled":""}>+</button>
+            </div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+      if (g.selects.length || g.numbers.length) {
+        html += `<div class="sec">Adjustments</div><div class="card">${g.selects.map(renderGenericRow).join("")}${g.numbers.map(renderGenericRow).join("")}</div>`;
+      }
+      if (g.status.length || g.buttons.length) {
+        html += `<div class="sec">Status & maintenance</div><div class="card">${g.status.map(renderStatusRow).join("")}${g.buttons.map(renderGenericRow).join("")}</div>`;
+      }
+      if (g.config.length || g.histHeap) {
+        html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.histHeap ? `<div style="padding:0 12px 10px">${renderMicrochart(g.histHeap, { title: "ESP32 free heap", icon: "tune", accent: "#4FE3EA", unit: "KB" })}</div>` : ""}${g.config.map(renderGenericRow).join("")}</details>`;
+      }
+    }
+  }
+
+  document.getElementById("app").innerHTML = html;
+  bindHandlers(g);
+}
+
+function bindHandlers(g) {
+  const rbtn = document.getElementById("retryBtn");
+  if (rbtn) rbtn.onclick = connectSse;
+  const ds = document.getElementById("dialSaltBtn"), db = document.getElementById("dialBoostBtn");
+  if (ds) ds.onclick = ev => { ev.stopPropagation(); activeTab = "Salt"; render(); };
+  if (db) db.onclick = ev => { ev.stopPropagation(); activeTab = "Salt"; render(); };
+
+  const dial = document.getElementById("dialBox"), cl = g.climates[0];
+  if (dial && cl && connState === "online") {
+    const lo = parseFloat(dial.dataset.min), hi = parseFloat(dial.dataset.max), stp = parseFloat(dial.dataset.step), isF = dial.dataset.isf === "1";
+    const toD = c => isF ? c * 9 / 5 + 32 : c;
+    const snap = d => Math.max(lo, Math.min(hi, Math.round(d / stp) * stp));
+    const curTgt = () => snap(toD(pendingTargetC !== null ? pendingTargetC : num(cl.target_temperature)));
+    const sm = document.getElementById("stepMinus"), sp = document.getElementById("stepPlus");
+    if (sm) sm.onclick = () => sendClimateTarget(cl, curTgt() - stp, isF, false);
+    if (sp) sp.onclick = () => sendClimateTarget(cl, curTgt() + stp, isF, false);
+
+    const readPreset = (e, defF) => {
+      const v = e ? num(e.value) : NaN;
+      if (Number.isNaN(v)) return isF ? defF : (defF - 32) * 5 / 9;
+      const eF = (e.uom || (isF ? "°F" : "°C")) === "°F";
+      return eF === isF ? v : (isF ? v * 9 / 5 + 32 : (v - 32) * 5 / 9);
+    };
+    const hb = document.getElementById("heatUpBtn"), vb = document.getElementById("vacBtn");
+    if (hb) hb.onclick = () => sendClimateTarget(cl, snap(readPreset(g.heatUpNum, 102)), isF, true);
+    if (vb) vb.onclick = () => sendClimateTarget(cl, snap(readPreset(g.vacNum, 85)), isF, true);
+
+    let dragging = false;
+    const pick = ev => {
+      const rect = dial.getBoundingClientRect();
+      const pt = ev.touches ? ev.touches[0] : ev;
+      const x = pt.clientX - (rect.left + rect.width / 2), y = pt.clientY - (rect.top + rect.height / 2);
+      let a = Math.atan2(y, x) - 0.75 * Math.PI;
+      a = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      if (a > 1.5 * Math.PI) a = (a - 1.5 * Math.PI) < (2 * Math.PI - a) ? 1.5 * Math.PI : 0;
+      sendClimateTarget(cl, snap(lo + (a / (1.5 * Math.PI)) * (hi - lo)), isF, false);
+    };
+    dial.onpointerdown = ev => { if (ev.target.closest("button")) return; dragging = true; dial.setPointerCapture(ev.pointerId); pick(ev); };
+    dial.onpointermove = ev => { if (dragging) pick(ev); };
+    dial.onpointerup = () => { dragging = false; };
+    dial.onpointercancel = () => { dragging = false; };
+  }
+
+  document.querySelectorAll("[data-stab]").forEach(b => b.onclick = () => {
+    settingsSubTab = b.dataset.stab;
+    render();
+  });
+  document.querySelectorAll("[data-htf]").forEach(b => b.onclick = () => {
+    historyTf = b.dataset.htf;
+    render();
+  });
+  const tip = document.getElementById("mcTip"), tipL = document.getElementById("mcTipLbl"), tipV = document.getElementById("mcTipVal");
+  if (tip) {
+    document.querySelectorAll("[data-tip]").forEach(el => {
+      const show = ev => {
+        const [gid, idxS] = el.dataset.tip.split(":");
+        const entry = _tipData[gid], idx = parseInt(idxS, 10);
+        if (!entry || !entry.h) return;
+        tipL.textContent = historyAxisLabel(entry.h, idx);
+        tipV.textContent = entry.fmtV(entry.h.values[idx]);
+        tip.style.display = "block";
+        tip.style.left = `${Math.min(window.innerWidth - 140, ev.clientX + 10)}px`;
+        tip.style.top = `${Math.max(10, ev.clientY - 44)}px`;
+      };
+      el.onpointerenter = show;
+      el.onpointermove = show;
+      el.onpointerleave = () => { tip.style.display = "none"; };
+    });
+  }
+  document.querySelectorAll("[data-cr]").forEach(b => b.onclick = () => {
+    const [cid, tk] = b.dataset.cr.split(":");
+    chartRanges[cid] = tk;
+    render();
+  });
+  document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => cl && post(`/climate/${encName(cl)}/set?mode=${encodeURIComponent(b.dataset.mode)}`));
+  document.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => cl && post(`/climate/${encName(cl)}/set?preset=${encodeURIComponent(b.dataset.preset)}`));
+  document.querySelectorAll("[data-tile]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.tile];
+    if (!e || connState !== "online") return;
+    if (e.domain === "fan") {
+      const cnt = e.speed_count || 1;
+      if (cnt <= 1 || !e.value) post(`/fan/${encName(e)}/turn_${e.value?"off":"on"}${(!e.value&&cnt>1)?"?speed_level=1":""}`);
+      else if ((e.speed_level || 1) < cnt) post(`/fan/${encName(e)}/turn_on?speed_level=${(e.speed_level||1)+1}`);
+      else post(`/fan/${encName(e)}/turn_off`);
+    } else {
+      post(`/switch/${encName(e)}/turn_${e.value?"off":"on"}`);
+    }
+  });
+  document.querySelectorAll("[data-sw]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.sw];
+    if (e) post(`/switch/${encName(e)}/turn_${e.value?"off":"on"}`);
+  });
+  document.querySelectorAll("[data-num]").forEach(inp => {
+    const id = inp.dataset.num, e = entities[id];
+    inp.oninput = () => {
+      draggingNumber[id] = parseFloat(inp.value);
+      const lbl = document.getElementById(`nv-${id}`);
+      if (lbl && e) lbl.textContent = `${(num(e.step)||1)<1?draggingNumber[id].toFixed(1):draggingNumber[id].toFixed(0)}${e.uom||""}`;
+    };
+    inp.onchange = () => { delete draggingNumber[id]; e && post(`/number/${encName(e)}/set?value=${inp.value}`); };
+  });
+  document.querySelectorAll("[data-sel]").forEach(s => s.onchange = () => {
+    const e = entities[s.dataset.sel];
+    if (e) post(`/select/${encName(e)}/set?option=${encodeURIComponent(s.value)}`);
+  });
+  document.querySelectorAll("[data-btn]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.btn];
+    if (e) confirmRun(e.name, () => post(`/button/${encName(e)}/press`));
+  });
+  document.querySelectorAll("[data-pdec]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.pdec];
+    if (e) post(`/number/${encName(e)}/set?value=${Math.max(num(e.min_value)||79, Math.round(num(e.value)) - (num(e.step)||1))}`);
+  });
+  document.querySelectorAll("[data-pinc]").forEach(b => b.onclick = () => {
+    const e = entities[b.dataset.pinc];
+    if (e) post(`/number/${encName(e)}/set?value=${Math.min(num(e.max_value)||104, Math.round(num(e.value)) + (num(e.step)||1))}`);
+  });
+}
+
+let es = null, renderTimer = null;
+function scheduleRender() {
+  if (renderTimer) return;
+  renderTimer = setTimeout(() => { renderTimer = null; render(); }, 60);
+}
+function connectSse() {
+  if (es) es.close();
+  connState = "connecting";
+  render();
+  es = new EventSource("/events");
+  es.onopen = () => { connState = "online"; scheduleRender(); };
+  es.addEventListener("ping", ev => {
+    try { const d = JSON.parse(ev.data); if (d.title) spaTitle = d.title; } catch (e) {}
+    connState = "online";
+    scheduleRender();
+  });
+  es.addEventListener("state", ev => {
+    try {
+      const d = JSON.parse(ev.data);
+      if (d && d.id) { entities[d.id] = Object.assign(entities[d.id] || {}, d); scheduleRender(); }
+    } catch (e) {}
+  });
+  es.onerror = () => { connState = "offline"; scheduleRender(); };
+}
+
+setInterval(() => {
+  logoPhase = (logoPhase + 0.25) % 1;
+  const g = groupEntities();
+  if (g.logoLight) {
+    const st = parseLogoState(g.logoLight);
+    if (st >= 3) {
+      const [gr, bl] = logoLeds(st, logoPhase);
+      const ge = document.getElementById("lgGreen"), be = document.getElementById("lgBlue");
+      if (ge) ge.setAttribute("fill", gr ? "#2ef07a" : "#3a464d");
+      if (be) be.setAttribute("fill", bl ? "#2eb0ff" : "#3a464d");
+    }
+  }
+}, 250);
+setInterval(() => { if (activeTab === "Comfort") scheduleRender(); }, 30000);
+
+render();
+connectSse();
+</script>
+</body>
+</html>

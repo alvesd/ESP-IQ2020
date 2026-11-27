@@ -64,6 +64,7 @@ namespace iq2020_climate {
 	}
 
 	void IQ2020Climate::control(const climate::ClimateCall &call) {
+		if (g_iq2020_main == nullptr) return;
 		if (call.get_target_temperature().has_value()) {
 			g_iq2020_main->setTempAction(call.get_target_temperature().value());
 		}
