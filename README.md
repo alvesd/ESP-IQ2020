@@ -1,12 +1,15 @@
-# ESP-IQ2020: phone and watch apps
+# ESP-IQ2020: IQ2020 Spa Apps, Watches & Web UI
 
-This is a fork of [Ylianst/ESP-IQ2020](https://github.com/Ylianst/ESP-IQ2020). It adds apps for iPhone, Android, Apple Watch and Wear OS that control an IQ2020 hot tub **directly** through the ESP32, with no Home Assistant and no cloud.
+This is a fork of [Ylianst/ESP-IQ2020](https://github.com/Ylianst/ESP-IQ2020). It adds **IQ2020 Spa** apps for iPhone, iPad, Android, Apple Watch, and Wear OS — plus a self-contained on-device Web UI and persistent ESP32 history — to control an IQ2020 hot tub **directly** over local Wi-Fi or optional remote HTTPS, with no Home Assistant and no cloud account.
 
 ```
-Spa IQ2020 board ──RS485── ESP32 (ESPHome + iq2020 component) ──Wi-Fi, encrypted ESPHome API──► phone / watch app
+Spa IQ2020 board ──RS485── ESP32 (ESPHome + iq2020)
+                              ├─► Local Wi-Fi (TCP 6053, Noise PSK) ──► Phone, Tablet & Wear OS apps
+                              ├─► On-device Web UI (HTTP 80) ──────────► Any browser / optional Cloudflare Tunnel + Access (HTTPS)
+                              └─► iPhone WatchConnectivity relay ──────► Apple Watch app
 ```
 
-Home Assistant was only ever one client of ESPHome's native API. The app talks to the same ESP32 and the same entities, so anything Home Assistant could control, the app can too.
+Home Assistant was only ever one client of ESPHome's native API. The app and web UI talk to the same ESP32 and the same entities, so anything Home Assistant could control, they can too.
 
 <p align="center">
   <img src="documentation/images/app-comfort.png" width="250" alt="Comfort tab: water temperature dial, set point, jets and lights">
@@ -14,28 +17,63 @@ Home Assistant was only ever one client of ESPHome's native API. The app talks t
   <img src="documentation/images/app-power.png" width="250" alt="Power tab: controller, heater and pump power">
 </p>
 
-**What the fork adds**
+## What this fork adds (`v1.1.0`)
 
-- **Phone app** ([`app/`](app/), Flutter, iOS and Android). It finds the hot tub on your Wi-Fi and connects with the API encryption key.
-  - Temperature dial with −/+ set point, jets, lights, and the spa settings.
-  - Power and usage readings.
-  - A Salt tab for Freshwater salt systems.
-  - The screens are built from whatever entities the ESP32 reports, so spas with different jets, °F/°C, salt, Coolzone or audio all work.
-  - Phones and tablets are supported: on wide screens the navigation becomes a side rail.
-- **Apple Watch app** ([`app/ios/IQ2020Watch/`](app/ios/IQ2020Watch/)). It shows the water and target temperature, heater state, jets, lights and salt level, and gets them from the iPhone app.
-- **Wear OS app** ([`wear/`](wear/)). It shows the same single screen and connects to the hot tub itself over Wi-Fi. You set it up from the phone app with a QR code.
-- **Firmware for running without Home Assistant** ([`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml)):
-  - `api.reboot_timeout: 0s`, so the ESP32 doesn't reboot when no client is connected.
-  - SNTP time instead of Home Assistant time.
-  - Freshwater salt production level and boost.
+- **Phone & Tablet App ([`app/`](app/), Flutter — iOS, iPadOS & Android):**
+  - **Comfort Controls:** temperature dial with −/+ set point, live **heating ETA** (ESP32-calibrated rate of rise), **ESP32-stored global temperature presets** synced across phone, watches, and web UI, jets, lights (including logo/color LEDs), and dynamic entity discovery (°F/°C, salt, Coolzone, audio).
+  - **Freshwater Salt & IQ Tab:** zoned radial salt gauge, salt output level, boost, cartridge status/reset, and Freshwater IQ pH/chlorine readings when equipped.
+  - **Power & Energy Tab:** live controller, heater, and pump watts, voltage, current, daily & cumulative kWh, and 14-day micro-charts.
+  - **2-Year History Dashboard (`Settings → History`):** backed by [`components/iq2020_history/`](components/iq2020_history/) 3-tier NVS ring-buffer storage on the ESP32 (hourly, daily, and monthly rollups persisted across reboots).
+  - **System, Diagnostics & Pairing (`Settings`):** ESP32 heap/uptime/reset-reason diagnostics, **System → Reboot system** button with confirmation dialog, one-scan QR pairing for Wear OS watches, and responsive tablet / foldable navigation rail (including iPhone Duo).
+  - **Zero Cloud & Privacy-First:** connection profiles, API encryption keys, and optional remote Access service tokens are stored only on your devices (iOS Keychain / Android Keystore) — see [`PRIVACY.md`](PRIVACY.md).
+- **Apple Watch App ([`app/ios/IQ2020Watch/`](app/ios/IQ2020Watch/)):** bundled companion app showing water/target temperature, heating ETA, presets, jets, lights, and salt zone relayed through the iPhone.
+- **Wear OS App ([`wear/`](wear/)):** standalone watch app connecting directly over Wi-Fi (reusing `app/`'s Noise/protobuf client) with one-scan QR setup from the phone app.
+- **On-Device Embedded Web UI ([`components/iq2020_web/`](components/iq2020_web/)):** self-contained dark-mode web app served directly from the ESP32 at `http://<device>.local/` (Comfort, Salt, Power, History, and Settings including Reboot system) over ESPHome `web_server` v3 REST/SSE — works locally or behind Cloudflare Tunnel + Access.
+- **ESPHome Firmware & Custom Components ([`firmware/`](firmware/), [`components/iq2020_web/`](components/iq2020_web/), [`components/iq2020_history/`](components/iq2020_history/)):**
+  - [`components/iq2020/`](components/iq2020/) stays compatible with upstream `Ylianst/ESP-IQ2020`.
+  - [`firmware/hotspring.yaml`](firmware/hotspring.yaml) (full ESP-IDF config for M5Stack ATOM Lite + Tail485): `sram1_as_iram: true` + `flash_chip: generic` IRAM optimization, `api.reboot_timeout: 0s`, SNTP time, weekly Sunday 4:00 AM maintenance reboot with NVS history flush, `CONFIG_HTTPD_MAX_REQ_HDR_LEN: 4096` for Cloudflare Access headers, optional Noise-encrypted `fetch_remote_config`, and raw RS485 debug port (`1234`) disabled by default.
+  - [`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml): minimal Home Assistant-free starter config.
 
-The [`components/iq2020`](components/iq2020/) ESPHome component is identical to upstream, so the fork can keep merging upstream updates.
+## Installation & Setup
 
-**Getting started:** flash the ESP32 with [`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml), then build the app as described in [`app/README.md`](app/README.md).
+### 1. Flash the ESP32 Firmware
 
-The apps only work on your home network. For remote access, use a VPN such as Tailscale or WireGuard. Never port-forward the ESPHome API port.
+Choose [`firmware/hotspring.yaml`](firmware/hotspring.yaml) for the full feature set (Web UI, 2-year NVS history, global presets, heating ETA, Freshwater Salt/IQ) or [`firmware/hot-tub-mobile.yaml`](firmware/hot-tub-mobile.yaml) for a minimal setup:
 
-The rest of this README is the original upstream documentation for the hardware, wiring and the Home Assistant setup.
+1. Copy [`firmware/secrets.example.yaml`](firmware/secrets.example.yaml) to `firmware/secrets.yaml` (git-ignored), or enter the corresponding secrets in ESPHome Device Builder (`⋮` → Secrets).
+2. Generate a 32-byte base64 Noise API key:
+   ```bash
+   openssl rand -base64 32
+   ```
+3. Update Wi-Fi credentials, timezone, and Celsius entries (`_c_temperature` / `celsius: true`) if needed, then build and flash (USB-C for first install, OTA afterwards):
+   ```bash
+   esphome run firmware/hotspring.yaml
+   ```
+
+### 2. Install the Mobile & Watch Apps
+
+- **Android & Wear OS (Google Play Internal Testing):** Join the tester track at https://play.google.com/apps/internaltest/4699945925693455410, install **IQ2020 Spa** on your phone (and Wear OS watch if applicable), then pair the watch via **Settings → Set up watch** QR scan.
+- **iOS, iPadOS & Apple Watch:** Install **IQ2020 Spa** via TestFlight / the App Store (the Apple Watch companion installs automatically through the Watch app on iPhone).
+- **Build from Source (Flutter 3.22+):**
+  ```bash
+  # Phone & tablet app
+  cd app
+  flutter pub get
+  flutter test
+  flutter run                     # or: flutter build ios --release / flutter build appbundle --release
+
+  # Standalone Wear OS watch app
+  cd ../wear
+  flutter pub get
+  flutter run                     # or: flutter build appbundle --release
+  ```
+
+### 3. Connect (Local & Optional Remote Access)
+
+- **Local Wi-Fi:** Open **IQ2020 Spa**, select your spa under mDNS discovery (`_esphomelib._tcp`) or add its hostname/IP (`http://hotspring.local` or LAN IP), and enter your `api_encryption_key`. You can also open `http://<device>.local/` directly in any browser for the embedded Web UI.
+- **Remote Access (optional):** Keep ESPHome port `6053` and HTTP port `80` private on your LAN — never port-forward them to the internet. For away-from-home access, either connect over a VPN (Tailscale / WireGuard) **or** expose the ESP32 Web UI through a **Cloudflare Tunnel + Cloudflare Access**, then set your Remote URL (e.g., `https://spa.example.com`) and optional Service Token (`CF-Access-Client-Id` / `CF-Access-Client-Secret`) in the app's hot tub settings (the app tries LAN TCP `6053` first and falls back to HTTPS automatically).
+
+The rest of this README is the original upstream documentation for hardware compatibility, RS485 wiring, and optional Home Assistant integration.
 
 ---
 
