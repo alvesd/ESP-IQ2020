@@ -44,7 +44,7 @@ Stop on any error, warning, or failing test (the existing `deprecated_member_use
 
 ## 4. iOS (+ watchOS) → TestFlight
 
-Prereq: Xcode is signed in to team **DARRIN CURTIS ALVES (`JBD3U73AKM`)**.
+Prereq: Xcode is signed in to your Apple Developer team (`JBD3U73AKM`). Public App Store / Play Store builds must omit `--dart-define-from-file=cf_access.local.json` so personal URLs or tokens are never compiled into public binaries.
 
 ```bash
 cd app && flutter build ios --release --no-codesign

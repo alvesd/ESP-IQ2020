@@ -209,7 +209,7 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
                         controller: _remoteUrl,
                         decoration: const InputDecoration(
                           labelText: 'Remote URL',
-                          hintText: 'https://spa.alves.us',
+                          hintText: 'https://spa.example.com',
                         ),
                         keyboardType: TextInputType.url,
                         autocorrect: false,
