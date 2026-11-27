@@ -43,7 +43,22 @@ class _SpaScreenState extends State<SpaScreen> {
       remoteUrl: remote.remoteUrl,
       cfAccessClientId: remote.clientId,
       cfAccessClientSecret: remote.clientSecret,
+      onRemoteConfigReceived: _onRemoteConfigProvisioned,
     );
+  }
+
+  void _onRemoteConfigProvisioned(CfAccessConfig cfg) {
+    final cur = _device;
+    if (cfg.remoteUrl == cur.remoteUrl &&
+        cfg.clientId == cur.cfAccessClientId &&
+        cfg.clientSecret == cur.cfAccessClientSecret) {
+      return;
+    }
+    unawaited(widget.store.upsert(cur.copyWith(
+      remoteUrl: cfg.remoteUrl,
+      cfAccessClientId: cfg.clientId,
+      cfAccessClientSecret: cfg.clientSecret,
+    )));
   }
 
   @override

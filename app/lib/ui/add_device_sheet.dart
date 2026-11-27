@@ -25,6 +25,7 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
   late final TextEditingController _cfClientSecret;
   bool _showKey = false;
   bool _showCfSecret = false;
+  bool _useCfToken = false;
 
   Future<void> _pasteKey() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -56,6 +57,7 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
     _remoteUrl = TextEditingController(text: e?.remoteUrl ?? '');
     _cfClientId = TextEditingController(text: e?.cfAccessClientId ?? '');
     _cfClientSecret = TextEditingController(text: e?.cfAccessClientSecret ?? '');
+    _useCfToken = (e?.cfAccessClientId.isNotEmpty ?? false) || (e?.cfAccessClientSecret.isNotEmpty ?? false);
   }
 
   @override
@@ -84,8 +86,8 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
       port: int.tryParse(_port.text.trim()) ?? 6053,
       encryptionKey: _key.text.trim(),
       remoteUrl: remoteUrl,
-      cfAccessClientId: _cfClientId.text.trim(),
-      cfAccessClientSecret: _cfClientSecret.text.trim(),
+      cfAccessClientId: _useCfToken ? _cfClientId.text.trim() : '',
+      cfAccessClientSecret: _useCfToken ? _cfClientSecret.text.trim() : '',
       heatUpTempC: widget.existing?.heatUpTempC ?? SavedDevice.defaultHeatUpTempC,
       vacationTempC: widget.existing?.vacationTempC ?? SavedDevice.defaultVacationTempC,
     ));
@@ -224,54 +226,78 @@ class _AddDeviceSheetState extends State<AddDeviceSheet> {
                           return null;
                         },
                       ),
-                      TextFormField(
-                        controller: _cfClientId,
-                        decoration: InputDecoration(
-                          labelText: 'CF-Access-Client-Id (optional)',
-                          helperText: hasDefaultCreds && defaultRemote.isNotEmpty
-                              ? 'Leave blank to use build-time token for $defaultRemote'
-                              : 'Only needed if protected by Cloudflare Access',
+                      if (_hasRemoteInput && !_useCfToken) ...[
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            icon: const Icon(Icons.vpn_key_outlined, size: 16),
+                            label: const Text('Add Cloudflare Access token'),
+                            onPressed: () => setState(() => _useCfToken = true),
+                          ),
                         ),
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        validator: (v) {
-                          final id = (v ?? '').trim();
-                          final sec = _cfClientSecret.text.trim();
-                          if (id.isEmpty != sec.isEmpty) {
-                            return 'Enter both Client ID and Client Secret';
-                          }
-                          return null;
-                        },
-                      ),
-                      TextFormField(
-                        controller: _cfClientSecret,
-                        decoration: InputDecoration(
-                          labelText: 'CF-Access-Client-Secret (optional)',
-                          suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
-                            IconButton(
-                              tooltip: 'Paste',
-                              icon: const Icon(Icons.content_paste),
-                              onPressed: _pasteCfSecret,
-                            ),
-                            IconButton(
-                              tooltip: _showCfSecret ? 'Hide' : 'Show',
-                              icon: Icon(_showCfSecret ? Icons.visibility_off : Icons.visibility),
-                              onPressed: () => setState(() => _showCfSecret = !_showCfSecret),
-                            ),
-                          ]),
+                      ],
+                      if (_useCfToken) ...[
+                        TextFormField(
+                          controller: _cfClientId,
+                          decoration: InputDecoration(
+                            labelText: 'CF-Access-Client-Id',
+                            helperText: hasDefaultCreds && defaultRemote.isNotEmpty
+                                ? 'Leave blank to use build-time token for $defaultRemote'
+                                : 'Stored encrypted in Keychain / Keystore',
+                          ),
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          validator: (v) {
+                            final id = (v ?? '').trim();
+                            final sec = _cfClientSecret.text.trim();
+                            if (id.isEmpty != sec.isEmpty) {
+                              return 'Enter both Client ID and Client Secret';
+                            }
+                            return null;
+                          },
                         ),
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        obscureText: !_showCfSecret,
-                        validator: (v) {
-                          final sec = (v ?? '').trim();
-                          final id = _cfClientId.text.trim();
-                          if (id.isEmpty != sec.isEmpty) {
-                            return 'Enter both Client ID and Client Secret';
-                          }
-                          return null;
-                        },
-                      ),
+                        TextFormField(
+                          controller: _cfClientSecret,
+                          decoration: InputDecoration(
+                            labelText: 'CF-Access-Client-Secret',
+                            suffixIcon: Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                tooltip: 'Paste',
+                                icon: const Icon(Icons.content_paste),
+                                onPressed: _pasteCfSecret,
+                              ),
+                              IconButton(
+                                tooltip: _showCfSecret ? 'Hide' : 'Show',
+                                icon: Icon(_showCfSecret ? Icons.visibility_off : Icons.visibility),
+                                onPressed: () => setState(() => _showCfSecret = !_showCfSecret),
+                              ),
+                            ]),
+                          ),
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          obscureText: !_showCfSecret,
+                          validator: (v) {
+                            final sec = (v ?? '').trim();
+                            final id = _cfClientId.text.trim();
+                            if (id.isEmpty != sec.isEmpty) {
+                              return 'Enter both Client ID and Client Secret';
+                            }
+                            return null;
+                          },
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () => setState(() {
+                              _cfClientId.clear();
+                              _cfClientSecret.clear();
+                              _useCfToken = false;
+                            }),
+                            child: const Text('Remove token'),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

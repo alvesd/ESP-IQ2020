@@ -152,6 +152,11 @@ class ProtoMessage {
           if (v is Uint8List) utf8.decode(v, allowMalformed: true),
       ];
 
+  List<Uint8List> bytesList(int f) => [
+        for (final v in _fields[f] ?? const <Object>[])
+          if (v is Uint8List) v,
+      ];
+
   /// Repeated enum/uint fields; accepts both packed (proto3 default) and unpacked encodings.
   List<int> uints(int f) {
     final out = <int>[];

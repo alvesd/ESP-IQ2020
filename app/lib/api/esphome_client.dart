@@ -205,20 +205,34 @@ class EspHomeClient extends ChangeNotifier {
   final String host;
   final int port;
   final String? encryptionKey;
-  final String? remoteUrl;
-  final String? cfAccessClientId;
-  final String? cfAccessClientSecret;
+  String? _remoteUrl;
+  String? _cfAccessClientId;
+  String? _cfAccessClientSecret;
   final String clientInfo;
+  final void Function(CfAccessConfig config)? onRemoteConfigReceived;
+
+  String? get remoteUrl => _remoteUrl;
+  String? get cfAccessClientId => _cfAccessClientId;
+  String? get cfAccessClientSecret => _cfAccessClientSecret;
 
   EspHomeClient({
     this.host = '',
     this.port = 6053,
     this.encryptionKey,
-    this.remoteUrl,
-    this.cfAccessClientId,
-    this.cfAccessClientSecret,
+    String? remoteUrl,
+    String? cfAccessClientId,
+    String? cfAccessClientSecret,
     this.clientInfo = 'IQ2020 Mobile',
-  });
+    this.onRemoteConfigReceived,
+  })  : _remoteUrl = remoteUrl,
+        _cfAccessClientId = cfAccessClientId,
+        _cfAccessClientSecret = cfAccessClientSecret;
+
+  void updateRemoteConfig(CfAccessConfig config) {
+    _remoteUrl = config.remoteUrl;
+    _cfAccessClientId = config.clientId;
+    _cfAccessClientSecret = config.clientSecret;
+  }
 
   ConnectionStatus status = ConnectionStatus.disconnected;
   ConnectionTransport transport = ConnectionTransport.none;
@@ -227,6 +241,7 @@ class EspHomeClient extends ChangeNotifier {
   DeviceInfo? deviceInfo;
   final Map<int, EntityInfo> entities = {};
   final Map<int, EntityState> states = {};
+  final Map<String, int> services = {};
 
   Socket? _socket;
   _FrameHelper? _frames;
@@ -314,6 +329,7 @@ class EspHomeClient extends ChangeNotifier {
         await _send(Requests.empty(MsgId.deviceInfoRequest));
         entities.clear();
         states.clear();
+        services.clear();
         await _send(Requests.empty(MsgId.listEntitiesRequest));
 
         // Read until entity listing is done (device info arrives in the same window).
@@ -331,6 +347,11 @@ class EspHomeClient extends ChangeNotifier {
         _setStatus(ConnectionStatus.connected);
         _startPing();
         unawaited(_readLoop(frames));
+        final fetchKey = services['fetch_remote_config'];
+        if (fetchKey != null && (encryptionKey?.isNotEmpty ?? false)) {
+          _sendQuiet(Requests.empty(MsgId.subscribeHomeassistantServicesRequest));
+          _sendQuiet(Requests.executeService(fetchKey));
+        }
         return;
       } catch (e) {
         _frames = null;
@@ -401,6 +422,7 @@ class EspHomeClient extends ChangeNotifier {
 
     entities.clear();
     states.clear();
+    services.clear();
     transport = ConnectionTransport.remote;
     _attempt = 0;
     lastError = null;
@@ -527,6 +549,26 @@ class EspHomeClient extends ChangeNotifier {
       case MsgId.deviceInfoResponse:
         deviceInfo = DeviceInfo.fromProto(ProtoMessage.decode(data));
         notifyListeners();
+        return;
+      case MsgId.listEntitiesServicesResponse:
+        final svc = ApiServiceInfo.fromProto(ProtoMessage.decode(data));
+        if (svc.name.isNotEmpty) services[svc.name] = svc.key;
+        return;
+      case MsgId.homeassistantActionRequest:
+        // Only accept provisioned remote/Cloudflare credentials over a local Noise-encrypted socket.
+        if (transport == ConnectionTransport.local && (encryptionKey?.isNotEmpty ?? false)) {
+          final ev = HomeassistantEvent.fromProto(ProtoMessage.decode(data));
+          if (ev.isEvent && ev.service == 'esphome.iq2020_remote_config') {
+            final url = normalizeRemoteUrl(ev.data['remote_url'] ?? '');
+            final cid = (ev.data['cf_client_id'] ?? '').trim();
+            final csec = (ev.data['cf_client_secret'] ?? '').trim();
+            if (url.isNotEmpty) {
+              final cfg = CfAccessConfig(remoteUrl: url, clientId: cid, clientSecret: csec);
+              updateRemoteConfig(cfg);
+              onRemoteConfigReceived?.call(cfg);
+            }
+          }
+        }
         return;
     }
     final info = EntityInfo.fromList(type, data);

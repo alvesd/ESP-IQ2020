@@ -37,6 +37,16 @@ api:
   encryption:
     key: !secret hotspring_api_key
   reboot_timeout: 0s             # MOBILE: don't reboot every 15 min when Home Assistant isn't connected
+  # MOBILE (optional): auto-provision remote URL & Cloudflare Access token over Noise-encrypted API only
+  # actions:
+  #   - action: fetch_remote_config
+  #     then:
+  #       - homeassistant.event:
+  #           event: esphome.iq2020_remote_config
+  #           data:
+  #             remote_url: !secret iq2020_remote_url
+  #             cf_client_id: !secret iq2020_cf_client_id
+  #             cf_client_secret: !secret iq2020_cf_client_secret
 
 ota:
   - platform: esphome

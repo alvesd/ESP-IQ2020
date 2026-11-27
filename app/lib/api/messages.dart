@@ -30,8 +30,12 @@ abstract final class MsgId {
   static const textSensorState = 27;
   static const fanCommand = 31;
   static const switchCommand = 33;
+  static const subscribeHomeassistantServicesRequest = 34;
+  static const homeassistantActionRequest = 35;
   static const getTimeRequest = 36;
   static const getTimeResponse = 37;
+  static const listEntitiesServicesResponse = 41;
+  static const executeServiceRequest = 42;
   static const listClimate = 46;
   static const climateState = 47;
   static const climateCommand = 48;
@@ -354,4 +358,41 @@ abstract final class Requests {
 
   static (int, Uint8List) textCommand(int key, String value) =>
       (MsgId.textCommand, (ProtoWriter()..fixed32(1, key)..string(2, value)).toBytes());
+
+  static (int, Uint8List) executeService(int key) =>
+      (MsgId.executeServiceRequest, (ProtoWriter()..fixed32(1, key)).toBytes());
+}
+
+class ApiServiceInfo {
+  final String name;
+  final int key;
+
+  const ApiServiceInfo({required this.name, required this.key});
+
+  factory ApiServiceInfo.fromProto(ProtoMessage m) => ApiServiceInfo(
+        name: m.string(1),
+        key: m.fixed32(2),
+      );
+}
+
+class HomeassistantEvent {
+  final String service;
+  final Map<String, String> data;
+  final bool isEvent;
+
+  const HomeassistantEvent({required this.service, required this.data, required this.isEvent});
+
+  factory HomeassistantEvent.fromProto(ProtoMessage m) {
+    final map = <String, String>{};
+    for (final raw in m.bytesList(2)) {
+      final entry = ProtoMessage.decode(raw);
+      final k = entry.string(1);
+      if (k.isNotEmpty) map[k] = entry.string(2);
+    }
+    return HomeassistantEvent(
+      service: m.string(1),
+      data: map,
+      isEvent: m.boolean(5),
+    );
+  }
 }
