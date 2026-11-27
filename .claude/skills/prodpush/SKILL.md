@@ -93,6 +93,10 @@ Upload to **Google Play Console** on the **Wear OS only** form-factor Internal t
 
 Tester opt-in link: https://play.google.com/apps/internaltest/4699945925693455410
 
+## 7. App Store Screenshots
+
+Follow the `preview` skill: capture screenshots directly from the real iOS, iPadOS, and watchOS Simulators (`iPhone 18 Pro` `1206×2622`, `iPhone Duo` **folded `1398×2034` AND unfolded `2853×2007`**, `iPad Pro 13-inch` **landscape `2752×2064`**, `Apple Watch Series 12` `416×496`) with clean `9:41` status bar override and flatten to opaque 24-bit RGB PNG (`hasAlpha: no`) before uploading to App Store Connect — never use web UI or synthetic renders.
+
 ## Safety
 
 - Never interact with the live hot tub while testing a build.
