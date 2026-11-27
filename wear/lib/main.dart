@@ -3,6 +3,7 @@
 // phone app's ESPHome client, so it works without the phone nearby.
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:iq2020_mobile/api/esphome_client.dart';
@@ -188,12 +189,18 @@ class WearSpaScreen extends StatefulWidget {
 }
 
 class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserver {
-  late final EspHomeClient _client = EspHomeClient(
-    host: widget.device.host,
-    port: widget.device.port,
-    encryptionKey: widget.device.encryptionKey.isEmpty ? null : widget.device.encryptionKey,
-    clientInfo: 'IQ2020 Wear OS',
-  );
+  late final EspHomeClient _client = () {
+    final remote = widget.device.effectiveRemote;
+    return EspHomeClient(
+      host: widget.device.host,
+      port: widget.device.port,
+      encryptionKey: widget.device.encryptionKey.isEmpty ? null : widget.device.encryptionKey,
+      remoteUrl: remote.remoteUrl,
+      cfAccessClientId: remote.clientId,
+      cfAccessClientSecret: remote.clientSecret,
+      clientInfo: 'IQ2020 Wear OS',
+    );
+  }();
   double? _pendingTarget;
   Timer? _debounce;
   Timer? _etaTick;
@@ -421,9 +428,110 @@ class _WearSpaScreenState extends State<WearSpaScreen> with WidgetsBindingObserv
             ),
           ),
         if (snap.salt != null || snap.saltPower != null || snap.saltBoost) _SaltRow(snap: snap),
+        if (snap.tempHistory.isNotEmpty)
+          _WatchMicrochart(
+            title: '14d Water',
+            values: snap.tempHistory,
+            accent: const Color(0xFFFF8A4C),
+            unit: snap.unit,
+            decimals: snap.step < 1 ? 1 : 0,
+          ),
+        if (snap.saltHistory.isNotEmpty)
+          _WatchMicrochart(
+            title: '14d Salt',
+            values: snap.saltHistory,
+            accent: (snap.salt == null ? null : ui.saltZone(snap.salt!)?.$2) ?? SpaColors.aqua,
+          ),
       ],
     );
   }
+}
+
+class _WatchMicrochart extends StatelessWidget {
+  final String title;
+  final List<double> values;
+  final Color accent;
+  final String unit;
+  final int decimals;
+  const _WatchMicrochart({
+    required this.title,
+    required this.values,
+    required this.accent,
+    this.unit = '',
+    this.decimals = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    String fmt(double v) => '${decimals == 0 ? v.round() : v.toStringAsFixed(decimals)}$unit';
+    return Container(
+      margin: const EdgeInsets.only(top: 6),
+      padding: const EdgeInsets.fromLTRB(10, 7, 10, 6),
+      decoration: BoxDecoration(
+        color: SpaColors.glass,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: SpaColors.glassBorder),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(title, style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text('${fmt(minV)}–${fmt(maxV)}',
+              style: theme.textTheme.labelSmall?.copyWith(fontSize: 10, color: theme.colorScheme.onSurfaceVariant)),
+        ]),
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 28,
+          child: CustomPaint(painter: _WearSparkPainter(values: values, accent: accent)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _WearSparkPainter extends CustomPainter {
+  final List<double> values;
+  final Color accent;
+  const _WearSparkPainter({required this.values, required this.accent});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.isEmpty || size.width <= 0 || size.height <= 0) return;
+    var minV = values.reduce(math.min);
+    final maxV = values.reduce(math.max);
+    var rng = maxV - minV;
+    if (rng < 1e-6) {
+      rng = 1.0;
+      minV -= 0.5;
+    }
+    const pad = 2.0;
+    final h = math.max(1.0, size.height - pad * 2);
+    double xAt(int i) => values.length <= 1 ? size.width / 2 : (i / (values.length - 1)) * size.width;
+    double yAt(double v) => pad + (1.0 - ((v - minV) / rng).clamp(0.0, 1.0)) * h;
+    if (values.length == 1) {
+      canvas.drawCircle(Offset(xAt(0), yAt(values.first)), 3, Paint()..color = accent);
+      return;
+    }
+    final path = Path()..moveTo(xAt(0), yAt(values[0]));
+    for (var i = 1; i < values.length; i++) {
+      path.lineTo(xAt(i), yAt(values[i]));
+    }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = accent
+        ..strokeWidth = 1.8
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawCircle(Offset(xAt(values.length - 1), yAt(values.last)), 2.5, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_WearSparkPainter old) => old.values != values || old.accent != accent;
 }
 
 class _WearPresetChip extends StatelessWidget {

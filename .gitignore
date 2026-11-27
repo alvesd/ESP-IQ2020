@@ -253,3 +253,5 @@ ModelManifest.xml
 # Mobile fork
 firmware/secrets.yaml
 firmware/.esphome/
+app/cf_access.local.json
+wear/cf_access.local.json

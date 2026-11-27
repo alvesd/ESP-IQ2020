@@ -70,13 +70,23 @@ class WatchRelay {
     await store.load();
     final device = store.devices.firstOrNull;
     if (device == null) return null;
-    if (_device?.id != device.id || _device?.encryptionKey != device.encryptionKey || _device?.host != device.host) {
+    if (_device?.id != device.id ||
+        _device?.encryptionKey != device.encryptionKey ||
+        _device?.host != device.host ||
+        _device?.port != device.port ||
+        _device?.remoteUrl != device.remoteUrl ||
+        _device?.cfAccessClientId != device.cfAccessClientId ||
+        _device?.cfAccessClientSecret != device.cfAccessClientSecret) {
       _close();
       _device = device;
+      final remote = device.effectiveRemote;
       _client = EspHomeClient(
         host: device.host,
         port: device.port,
         encryptionKey: device.encryptionKey.isEmpty ? null : device.encryptionKey,
+        remoteUrl: remote.remoteUrl,
+        cfAccessClientId: remote.clientId,
+        cfAccessClientSecret: remote.clientSecret,
         clientInfo: 'IQ2020 Watch relay',
       )..addListener(_schedulePush);
     } else {

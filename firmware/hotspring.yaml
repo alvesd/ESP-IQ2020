@@ -24,8 +24,14 @@ esp32:
   flash_size: 4MB
   framework:
     type: esp-idf
+    sdkconfig_options:             # MOBILE: allow Cloudflare Tunnel/Access headers (JWT + cookies)
+      CONFIG_HTTPD_MAX_REQ_HDR_LEN: "4096"
 
 logger:
+  level: INFO                    # MOBILE: reduce serial/log churn for long-term stability
+
+debug:                           # MOBILE: heap & reset-reason diagnostics
+  update_interval: 60s
 
 api:
   encryption:
@@ -52,11 +58,19 @@ time:                            # MOBILE: clock from the internet instead of Ho
   - platform: sntp
     id: sntp_time
     timezone: America/New_York
+    on_time:                     # MOBILE: weekly scheduled reboot (Sunday 4:00 AM) to keep heap fresh
+      - seconds: 0
+        minutes: 0
+        hours: 4
+        days_of_week: SUN
+        then:
+          - lambda: 'id(spa_history).save_now();'
+          - delay: 200ms
+          - button.press: esp_restart_button
 
 external_components:
-  - source: github://ylianst/esp-iq2020
   - source: github://alvesd/ESP-IQ2020@mobile-app
-    components: [iq2020_web]
+    components: [iq2020, iq2020_web, iq2020_history]
     refresh: 0s
 
 web_server:                      # MOBILE: REST + SSE API for the on-device web UI
@@ -84,6 +98,7 @@ iq2020:
 button:
   - platform: restart
     name: "ESP Restart"
+    id: esp_restart_button
   - platform: iq2020
     # Freshwater Salt only
     name: Salt Test
@@ -190,6 +205,7 @@ sensor:
     # ACE/Freshwater Salt
     salt_content:
       name: Salt Level
+      id: salt_level_sensor
     # Freshwater Salt only
     salt_days_since_manual_test:
       name: Salt Last Manual Test (Days)
@@ -202,20 +218,6 @@ sensor:
     # Freshwater Salt only
     salt_error_code:
       name: Salt Error Code
-    # Freshwater IQ (water chemistry)
-    iq_chlorine:
-      name: IQ Chlorine
-      unit_of_measurement: "ppm"
-      icon: "mdi:flask"
-    iq_ph:
-      name: IQ pH
-      icon: "mdi:ph"
-    iq_orp:
-      name: IQ ORP
-    iq_hoursleft:
-      name: IQ Cartridge Hours Left
-      unit_of_measurement: "h"
-      icon: "mdi:timer-outline"
 
     #Lifetime counters
     lifetime_runtime:
@@ -252,6 +254,7 @@ sensor:
   # Daily energy (resets at midnight via sntp_time)
   - platform: total_daily_energy
     name: Pumps Energy
+    id: pumps_energy
     power_id: power_l1
     time_id: sntp_time
     unit_of_measurement: "kWh"
@@ -262,6 +265,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy
     name: Controller Energy
+    id: controller_energy
     power_id: power_heater
     time_id: sntp_time
     unit_of_measurement: "kWh"
@@ -272,6 +276,7 @@ sensor:
       - multiply: 0.001
   - platform: total_daily_energy
     name: Heater Energy
+    id: heater_energy
     power_id: power_l2
     time_id: sntp_time
     unit_of_measurement: "kWh"
@@ -298,7 +303,27 @@ sensor:
     device_class: ""
   - platform: uptime
     name: "ESP Uptime"
+    id: esp_uptime
     entity_category: diagnostic
+    on_value:                      # MOBILE: 7-day uptime fallback reboot even if SNTP missed Sunday 4 AM
+      - if:
+          condition:
+            lambda: 'return x >= 604800.0f;'
+          then:
+            - lambda: 'id(spa_history).save_now();'
+            - delay: 200ms
+            - button.press: esp_restart_button
+  - platform: debug                # MOBILE: heap & loop-time monitoring
+    free:
+      name: "ESP Free Heap"
+      id: esp_free_heap
+      entity_category: diagnostic
+    block:
+      name: "ESP Max Free Block"
+      entity_category: diagnostic
+    loop_time:
+      name: "ESP Loop Time"
+      entity_category: diagnostic
 
   # MOBILE: ESP32-tracked heating rate-of-rise and Ready ETA
   - platform: template
@@ -448,6 +473,30 @@ text_sensor:
     name: Ready Time
     icon: "mdi:clock-check-outline"
     update_interval: never
+  - platform: debug
+    reset_reason:
+      name: "ESP Reset Reason"
+      entity_category: diagnostic
+
+iq2020_history:                          # MOBILE: NVS-persisted 14-day metrics for phone/web/watch microcharts
+  id: spa_history
+  time_id: sntp_time
+  bucket_hours: 6
+  water_temp_id: current_water_temp
+  power_ids: [power_l1, power_heater, power_l2]
+  energy_ids: [pumps_energy, controller_energy, heater_energy]
+  salt_id: salt_level_sensor
+  free_heap_id: esp_free_heap
+  water_temp:
+    name: "History Water Temp"
+  power:
+    name: "History Power"
+  energy:
+    name: "History Energy"
+  salt:
+    name: "History Salt"
+  free_heap:
+    name: "History Free Heap"
 
 interval:
   - interval: 15s

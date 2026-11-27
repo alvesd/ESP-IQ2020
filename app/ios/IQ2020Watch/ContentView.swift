@@ -292,10 +292,83 @@ struct ContentView: View {
           .padding(.top, 2)
         }
 
+        if !s.tempHistory.isEmpty {
+          WatchSparklineCard(
+            title: "14d Water",
+            values: s.tempHistory,
+            accent: Color(red: 1, green: 0.54, blue: 0.3),
+            unit: s.unit,
+            decimals: s.step < 1 ? 1 : 0
+          )
+        }
+        if !s.saltHistory.isEmpty {
+          WatchSparklineCard(
+            title: "14d Salt",
+            values: s.saltHistory,
+            accent: s.saltZone != nil ? zoneColor(s.saltZone) : aqua,
+            unit: "",
+            decimals: 0
+          )
+        }
+
         if let error = store.error {
           Text(error).font(.caption2).foregroundStyle(.orange).multilineTextAlignment(.center)
         }
       }
     }
+  }
+}
+
+private struct WatchSparklineCard: View {
+  let title: String
+  let values: [Double]
+  let accent: Color
+  let unit: String
+  let decimals: Int
+
+  private func fmt(_ v: Double) -> String {
+    let s = decimals == 0 ? String(format: "%.0f", v) : String(format: "%.\(decimals)f", v)
+    return "\(s)\(unit)"
+  }
+
+  var body: some View {
+    let minV = values.min() ?? 0
+    let maxV = values.max() ?? 0
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text(title).font(.caption2.weight(.semibold))
+        Spacer()
+        Text("\(fmt(minV))–\(fmt(maxV))")
+          .font(.system(size: 10))
+          .foregroundStyle(.secondary)
+      }
+      GeometryReader { geo in
+        let w = geo.size.width
+        let h = geo.size.height
+        let lo = (maxV - minV) < 1e-6 ? minV - 0.5 : minV
+        let rng = max(1e-6, (maxV - minV) < 1e-6 ? 1.0 : (maxV - minV))
+        let pts: [CGPoint] = values.enumerated().map { idx, val in
+          let x = values.count <= 1 ? w / 2 : (CGFloat(idx) / CGFloat(values.count - 1)) * w
+          let y = 2 + (1 - CGFloat((val - lo) / rng)) * max(1, h - 4)
+          return CGPoint(x: x, y: y)
+        }
+        ZStack {
+          if pts.count >= 2 {
+            Path { p in
+              p.move(to: pts[0])
+              for pt in pts.dropFirst() { p.addLine(to: pt) }
+            }
+            .stroke(accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+          }
+          if let last = pts.last {
+            Circle().fill(.white).frame(width: 4.5, height: 4.5).position(last)
+          }
+        }
+      }
+      .frame(height: 26)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 6)
+    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
   }
 }

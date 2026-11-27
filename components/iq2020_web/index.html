@@ -106,6 +106,12 @@ button,select,input{font:inherit;color:inherit}
 .modal p{margin:0 0 18px;font-size:13.5px;color:var(--muted)}
 .modal-act{display:flex;justify-content:flex-end;gap:10px}
 .btn-pri{padding:8px 16px;border-radius:999px;border:none;background:var(--aqua);color:#061a24;font-weight:700;cursor:pointer}
+.mc{padding:12px 14px 10px;margin-top:10px}
+.mc-hd{display:flex;align-items:center;gap:8px}
+.mc-badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}
+.mc-val{font-size:14px;font-weight:700}
+.mc-svg{width:100%;height:54px;display:block;margin-top:8px}
+.mc-ft{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px}
 @media(min-width:640px){body{padding-bottom:24px}.bbar{display:none}.nav-top{display:flex}.grid-wide{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
 </head>
@@ -316,7 +322,9 @@ document.getElementById("modalCancel").onclick = () => document.getElementById("
 function groupEntities() {
   const all = Object.values(entities).filter(e => !e.is_disabled_by_default);
   const byName = (a, b) => String(a.name || "").localeCompare(String(b.name || ""));
-  const isSalt = e => oid(e).includes("salt");
+  const isHistory = e => oid(e).startsWith("history_");
+  const hist = id => all.find(e => e.domain === "text_sensor" && oid(e) === id);
+  const isSalt = e => oid(e).includes("salt") && !isHistory(e);
   const main = (e, cat) => (e.entity_category || 0) === cat;
 
   const saltSensors = all.filter(e => isSalt(e) && e.domain === "sensor").sort(byName);
@@ -324,7 +332,7 @@ function groupEntities() {
   const saltControls = all.filter(e => isSalt(e) && ["switch","number","select"].includes(e.domain)).sort(byName);
   const saltButtons = all.filter(e => isSalt(e) && e.domain === "button").sort(byName);
 
-  const vis = all.filter(e => !isSalt(e));
+  const vis = all.filter(e => !isSalt(e) && !isHistory(e));
   const heatUpNum = vis.find(e => e.domain === "number" && oid(e) === "heat_up_temperature");
   const vacNum = vis.find(e => e.domain === "number" && oid(e) === "vacation_temperature");
   const etaSec = vis.find(e => e.domain === "sensor" && oid(e) === "ready_eta_seconds");
@@ -352,6 +360,8 @@ function groupEntities() {
     status: [...kind("binary_sensor"), ...kind("text_sensor").filter(e => e !== logoLight && e !== readyTime)],
     buttons: kind("button"),
     config, comfort, power, usage, logoLight, heatUpNum, vacNum, etaSec, etaCal, etaProg, readyTime,
+    histWater: hist("history_water_temp"), histPower: hist("history_power"),
+    histEnergy: hist("history_energy"), histSalt: hist("history_salt"), histHeap: hist("history_free_heap"),
     saltSensors, saltStatus, saltControls, saltButtons,
     saltLevel: saltSensors.find(e => oid(e) === "salt_level" || oid(e) === "salt_content"),
     saltPower: saltControls.find(e => e.domain === "number" && (oid(e).includes("power") || oid(e).includes("output"))) || saltControls.find(e => e.domain === "number"),
@@ -630,6 +640,83 @@ function renderGenericRow(e) {
   return renderStatusRow(e);
 }
 
+function parseHistory(raw) {
+  const s = String(raw || "").trim();
+  const c = s.indexOf(":");
+  if (c <= 0) return null;
+  const prefix = s.slice(0, c).trim(), body = s.slice(c + 1);
+  if (!body.trim()) return null;
+  const hours = prefix.endsWith("d") ? (parseInt(prefix, 10) || 1) * 24 : (parseInt(prefix, 10) || 6);
+  const values = body.split(",").map(t => { const v = parseFloat(t.trim()); return Number.isFinite(v) ? v : null; });
+  const nn = values.filter(v => v !== null);
+  if (!nn.length) return null;
+  const totH = values.length * hours;
+  const span = totH >= 24 ? `${Math.round(totH / 24)}d` : `${totH}h`;
+  let latest = null;
+  for (let i = values.length - 1; i >= 0; i--) { if (values[i] !== null) { latest = values[i]; break; } }
+  return { prefix, span, values, min: Math.min(...nn), max: Math.max(...nn), latest };
+}
+
+function renderMicrochart(entity, { title, icon, accent, unit="", decimals=0, bars=false }) {
+  if (!entity) return "";
+  const h = parseHistory(entity.state);
+  const fmtV = v => v === null ? "—" : `${decimals === 0 ? Math.round(v) : v.toFixed(decimals)}${unit ? " " + unit : ""}`;
+  let body = `<div style="height:54px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">Collecting history…</div>`;
+  if (h) {
+    const W = 300, H = 54, pad = 4, dH = H - pad * 2;
+    let lo = h.min, hi = h.max;
+    if (bars && lo > 0) lo = 0;
+    let rng = hi - lo;
+    if (rng < 1e-6) { rng = 1; if (!bars) lo -= 0.5; }
+    let shapes = `<line x1="0" y1="${H-pad}" x2="${W}" y2="${H-pad}" stroke="rgba(255,255,255,.08)" stroke-width="1"/>`;
+    if (bars) {
+      const n = h.values.length, sw = W / Math.max(1, n), bw = Math.max(3, sw * 0.64);
+      h.values.forEach((v, i) => {
+        if (v === null) return;
+        const frac = Math.max(0.05, Math.min(1, (v - lo) / rng)), bh = frac * dH;
+        const x = i * sw + (sw - bw) / 2, y = pad + (dH - bh);
+        shapes += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2.5" fill="${accent}" fill-opacity="${i===n-1?1:0.55}"/>`;
+      });
+    } else {
+      const n = h.values.length;
+      const xAt = i => n <= 1 ? W / 2 : (i / (n - 1)) * W;
+      const yAt = v => pad + (1 - Math.max(0, Math.min(1, (v - lo) / rng))) * dH;
+      const gid = `mcg_${oid(entity)}`;
+      let defs = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${accent}" stop-opacity="0.30"/><stop offset="100%" stop-color="${accent}" stop-opacity="0"/></linearGradient></defs>`;
+      let seg = [], lastPt = null;
+      const flush = () => {
+        if (seg.length >= 2) {
+          const pts = seg.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+          const area = `M ${seg[0][0].toFixed(1)} ${seg[0][1].toFixed(1)} ` + seg.slice(1).map(p => `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ") + ` L ${seg[seg.length-1][0].toFixed(1)} ${H-pad} L ${seg[0][0].toFixed(1)} ${H-pad} Z`;
+          shapes += `<path d="${area}" fill="url(#${gid})"/><polyline fill="none" stroke="${accent}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${pts}"/>`;
+        } else if (seg.length === 1) {
+          shapes += `<circle cx="${seg[0][0].toFixed(1)}" cy="${seg[0][1].toFixed(1)}" r="3.5" fill="${accent}"/>`;
+        }
+        seg = [];
+      };
+      h.values.forEach((v, i) => {
+        if (v === null) { flush(); return; }
+        const pt = [xAt(i), yAt(v)];
+        seg.push(pt);
+        lastPt = pt;
+      });
+      flush();
+      if (lastPt) shapes += `<circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="3.8" fill="#fff"/><circle cx="${lastPt[0].toFixed(1)}" cy="${lastPt[1].toFixed(1)}" r="2.3" fill="${accent}"/>`;
+      shapes = defs + shapes;
+    }
+    body = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="mc-svg">${shapes}</svg>
+      <div class="mc-ft"><span>Min ${esc(fmtV(h.min))}</span><span>${h.values.length} × ${esc(h.prefix)}</span><span>Max ${esc(fmtV(h.max))}</span></div>`;
+  }
+  return `<div class="card mc">
+    <div class="mc-hd">
+      <span class="ico-badge" style="background:${accent}24;color:${accent};width:28px;height:28px">${iconSvg(icon,14)}</span>
+      <span style="font-size:13.5px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(title)}</span>
+      ${h?`<span class="mc-badge" style="background:${accent}24;color:${accent}">${esc(h.span)}</span>`:""}
+      <span class="mc-val">${esc(h ? fmtV(h.latest) : "—")}</span>
+    </div>${body}
+  </div>`;
+}
+
 function render() {
   const dot = document.getElementById("connDot"), ctxt = document.getElementById("connTxt");
   dot.style.background = connState === "online" ? "#22c55e" : (connState === "offline" ? "#ef4444" : "#f59e0b");
@@ -656,15 +743,19 @@ function render() {
       html += g.saltAdj.map(e => e.domain === "number" ? renderNumberRow(e, true) : `<div class="card" style="margin-bottom:12px">${renderGenericRow(e)}</div>`).join("");
       html += `<div class="grid grid-wide">${[...g.saltSwitches, ...g.switches].map(e => renderBigTile(e, false)).join("")}</div>`;
     }
-    if (g.comfort.length) html += `<div class="sec">Water</div>${renderSensors(g.comfort)}`;
+    if (g.comfort.length || g.histWater) html += `<div class="sec">Water</div>${g.comfort.length ? renderSensors(g.comfort) : ""}${renderMicrochart(g.histWater, { title: "Water temperature", icon: "thermo", accent: "#FF8A4C", unit: isF ? "°F" : "°C", decimals: 1 })}`;
   } else if (activeTab === "Power") {
-    html += g.power.length ? `<div class="sec">Power</div>${renderSensors(g.power)}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No power readings configured.</div>`;
+    const hasP = g.power.length || g.histPower || g.histEnergy;
+    html += hasP ? `<div class="sec">Power</div>${renderMicrochart(g.histPower, { title: "Total power draw", icon: "bolt", accent: "#E8A317", unit: "W" })}${renderMicrochart(g.histEnergy, { title: "Daily energy", icon: "bolt", accent: "#4FE3EA", unit: "kWh", decimals: 2, bars: true })}${g.power.length ? `<div style="margin-top:10px">${renderSensors(g.power)}</div>` : ""}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No power readings configured.</div>`;
   } else if (activeTab === "Usage") {
     html += g.usage.length ? `<div class="sec">Runtime & timers</div>${renderSensors(g.usage)}` : `<div style="text-align:center;padding:48px;color:var(--muted)">No runtime counters configured.</div>`;
   } else if (activeTab === "Salt") {
     const others = g.saltSensors.filter(e => e !== g.saltLevel);
     if (g.saltLevel) html += renderSaltGauge(g.saltLevel, g.saltStatus);
     else if (g.saltStatus.length) html += `<div class="card">${g.saltStatus.map(renderStatusRow).join("")}</div>`;
+    const sHist = g.histSalt ? parseHistory(g.histSalt.state) : null;
+    const sZone = sHist && sHist.latest !== null ? saltZone(sHist.latest) : null;
+    html += renderMicrochart(g.histSalt, { title: "Salt level history", icon: "salt", accent: sZone ? sZone.color : "#3D8BFD" });
     if (others.length) html += `<div class="sec">Cartridge & generator</div>${renderSensors(others)}`;
     if (g.saltControls.length) html += `<div class="sec">Controls</div><div class="card">${g.saltControls.map(renderGenericRow).join("")}</div>`;
     if (g.saltButtons.length) html += `<div class="sec">Maintenance</div><div class="card">${g.saltButtons.map(renderGenericRow).join("")}</div>`;
@@ -692,8 +783,8 @@ function render() {
     if (g.status.length || g.buttons.length) {
       html += `<div class="sec">Status & maintenance</div><div class="card">${g.status.map(renderStatusRow).join("")}${g.buttons.map(renderGenericRow).join("")}</div>`;
     }
-    if (g.config.length) {
-      html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.config.map(renderGenericRow).join("")}</details>`;
+    if (g.config.length || g.histHeap) {
+      html += `<details class="card exp" style="margin-top:16px"><summary>Device & diagnostics</summary>${g.histHeap ? `<div style="padding:0 12px 10px">${renderMicrochart(g.histHeap, { title: "ESP32 free heap", icon: "tune", accent: "#4FE3EA", unit: "KB" })}</div>` : ""}${g.config.map(renderGenericRow).join("")}</details>`;
     }
   }
 

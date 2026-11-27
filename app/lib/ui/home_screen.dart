@@ -41,6 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SpaBackdrop(child: SpaScreen(device: d, store: widget.store))));
   }
 
+  String _deviceSubtitle(SavedDevice d) {
+    final remote = d.effectiveRemote;
+    if (d.host.isEmpty && remote.hasRemoteUrl) return remote.remoteUrl;
+    final base = '${d.host}:${d.port}${d.encryptionKey.isEmpty ? '  (unencrypted)' : ''}';
+    return remote.hasRemoteUrl ? '$base  ·  Remote' : base;
+  }
+
   Future<void> _add({DiscoveredDevice? from, SavedDevice? edit}) async {
     final saved = await showModalBottomSheet<SavedDevice>(
       context: context,
@@ -73,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ListTile(
                   leading: const Icon(Icons.hot_tub),
                   title: Text(d.name),
-                  subtitle: Text('${d.host}:${d.port}${d.encryptionKey.isEmpty ? '  (unencrypted)' : ''}'),
+                  subtitle: Text(_deviceSubtitle(d)),
                   onTap: () => _open(d),
                   trailing: PopupMenuButton<String>(
                     onSelected: (v) async {

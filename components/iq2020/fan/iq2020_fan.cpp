@@ -28,6 +28,7 @@ namespace iq2020_fan {
 	};
 
 	void IQ2020Fan::control(const esphome::fan::FanCall &call) {
+		if (g_iq2020_main == nullptr) return;
 		ESP_LOGD(TAG, "IQ2020 fan %d control. State: %d, Speed: %d", fan_id, call.get_state().value_or(false) ? 1 : 0, call.get_speed().value_or(0));
 		state = call.get_state().value_or(false);
 		if (call.get_speed().has_value()) { speed = *(call.get_speed()); }

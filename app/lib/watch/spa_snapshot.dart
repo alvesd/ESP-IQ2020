@@ -5,6 +5,7 @@
 import '../api/esphome_client.dart';
 import '../api/messages.dart';
 import '../device_store.dart';
+import '../ui/history_series.dart';
 import '../ui/spa_screen.dart' as ui show saltZone;
 
 class WatchToggle {
@@ -40,6 +41,8 @@ class SpaSnapshot {
   final int? readyEtaSeconds; // ESP32-tracked remaining heat-up seconds
   final bool readyEtaCalibrated;
   final double? heatingRate; // °F/h (or °C/h) from ESP32
+  final List<double> tempHistory; // 14-day water temp samples
+  final List<double> saltHistory; // 14-day salt samples
 
   const SpaSnapshot({
     required this.name,
@@ -62,6 +65,8 @@ class SpaSnapshot {
     this.readyEtaSeconds,
     this.readyEtaCalibrated = false,
     this.heatingRate,
+    this.tempHistory = const [],
+    this.saltHistory = const [],
   });
 
   static double? _num(double v) => v.isNaN ? null : v;
@@ -133,6 +138,14 @@ class SpaSnapshot {
     final rateEntity = visible.where((e) => e.kind == EntityKind.sensor && e.objectId == 'heating_rate').firstOrNull;
     final heatingRate = rateEntity == null ? null : _num(c.states[rateEntity.key]?.number ?? double.nan);
 
+    List<double> historyFor(String id) {
+      final e = c.entities.values
+          .where((x) => !x.disabledByDefault && x.kind == EntityKind.textSensor && x.objectId == id)
+          .firstOrNull;
+      if (e == null) return const [];
+      return HistorySeries.parse(c.states[e.key]?.text).nonNullValues;
+    }
+
     final lo = climate == null ? (fahrenheit ? 79.0 : 26.0) : disp(climate.minValue);
     final hi = climate == null || climate.maxValue <= climate.minValue ? disp(40) : disp(climate.maxValue);
     final step = fahrenheit ? 1.0 : ((climate == null || climate.step <= 0) ? 0.5 : climate.step);
@@ -160,6 +173,8 @@ class SpaSnapshot {
       readyEtaSeconds: readyEtaSeconds,
       readyEtaCalibrated: readyEtaCalibrated,
       heatingRate: heatingRate,
+      tempHistory: historyFor('history_water_temp'),
+      saltHistory: historyFor('history_salt'),
     );
   }
 
@@ -193,10 +208,14 @@ class SpaSnapshot {
         'readyEtaSeconds': readyEtaSeconds,
         'readyEtaCalibrated': readyEtaCalibrated,
         'heatingRate': heatingRate,
+        'tempHistory': tempHistory,
+        'saltHistory': saltHistory,
       };
 
   factory SpaSnapshot.fromMap(Map<Object?, Object?> m) {
     final unit = m['unit'] as String;
+    List<double> numList(String k) =>
+        [for (final v in (m[k] as List<Object?>? ?? const [])) (v as num).toDouble()];
     return SpaSnapshot(
       name: m['name'] as String,
       online: m['online'] as bool,
@@ -218,6 +237,8 @@ class SpaSnapshot {
       readyEtaSeconds: (m['readyEtaSeconds'] as num?)?.toInt(),
       readyEtaCalibrated: m['readyEtaCalibrated'] as bool? ?? false,
       heatingRate: (m['heatingRate'] as num?)?.toDouble(),
+      tempHistory: numList('tempHistory'),
+      saltHistory: numList('saltHistory'),
     );
   }
 }

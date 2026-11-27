@@ -7,6 +7,8 @@ import 'package:bonsoir/bonsoir.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'api/cf_access.dart';
+
 class SavedDevice {
   static const double defaultHeatUpTempC = (102 - 32) * 5 / 9;
   static const double defaultVacationTempC = (85 - 32) * 5 / 9;
@@ -16,24 +18,39 @@ class SavedDevice {
   final String host;
   final int port;
   final String encryptionKey;
+  final String remoteUrl;
+  final String cfAccessClientId;
+  final String cfAccessClientSecret;
   final double heatUpTempC;
   final double vacationTempC;
 
   const SavedDevice({
     required this.id,
     required this.name,
-    required this.host,
+    this.host = '',
     this.port = 6053,
     this.encryptionKey = '',
+    this.remoteUrl = '',
+    this.cfAccessClientId = '',
+    this.cfAccessClientSecret = '',
     this.heatUpTempC = defaultHeatUpTempC,
     this.vacationTempC = defaultVacationTempC,
   });
+
+  CfAccessConfig get effectiveRemote => CfAccessConfig.resolve(
+        remoteUrl: remoteUrl,
+        clientId: cfAccessClientId,
+        clientSecret: cfAccessClientSecret,
+      );
 
   SavedDevice copyWith({
     String? name,
     String? host,
     int? port,
     String? encryptionKey,
+    String? remoteUrl,
+    String? cfAccessClientId,
+    String? cfAccessClientSecret,
     double? heatUpTempC,
     double? vacationTempC,
   }) =>
@@ -43,6 +60,9 @@ class SavedDevice {
         host: host ?? this.host,
         port: port ?? this.port,
         encryptionKey: encryptionKey ?? this.encryptionKey,
+        remoteUrl: remoteUrl ?? this.remoteUrl,
+        cfAccessClientId: cfAccessClientId ?? this.cfAccessClientId,
+        cfAccessClientSecret: cfAccessClientSecret ?? this.cfAccessClientSecret,
         heatUpTempC: heatUpTempC ?? this.heatUpTempC,
         vacationTempC: vacationTempC ?? this.vacationTempC,
       );
@@ -53,6 +73,9 @@ class SavedDevice {
         'host': host,
         'port': port,
         'key': encryptionKey,
+        if (remoteUrl.isNotEmpty) 'remoteUrl': remoteUrl,
+        if (cfAccessClientId.isNotEmpty) 'cfAccessClientId': cfAccessClientId,
+        if (cfAccessClientSecret.isNotEmpty) 'cfAccessClientSecret': cfAccessClientSecret,
         'heatUpTempC': heatUpTempC,
         'vacationTempC': vacationTempC,
       };
@@ -60,9 +83,12 @@ class SavedDevice {
   factory SavedDevice.fromJson(Map<String, dynamic> j) => SavedDevice(
         id: j['id'] as String,
         name: j['name'] as String,
-        host: j['host'] as String,
+        host: (j['host'] as String?) ?? '',
         port: (j['port'] as num?)?.toInt() ?? 6053,
         encryptionKey: (j['key'] as String?) ?? '',
+        remoteUrl: (j['remoteUrl'] as String?) ?? '',
+        cfAccessClientId: (j['cfAccessClientId'] as String?) ?? '',
+        cfAccessClientSecret: (j['cfAccessClientSecret'] as String?) ?? '',
         heatUpTempC: (j['heatUpTempC'] as num?)?.toDouble() ?? defaultHeatUpTempC,
         vacationTempC: (j['vacationTempC'] as num?)?.toDouble() ?? defaultVacationTempC,
       );

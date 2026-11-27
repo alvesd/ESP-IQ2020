@@ -5,13 +5,17 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../api/cf_access.dart';
 import '../api/esphome_client.dart';
 import '../api/messages.dart';
 import '../device_store.dart';
+import 'add_device_sheet.dart';
 import 'heating_eta.dart';
+import 'history_series.dart';
 import 'logo_light_badge.dart';
 import 'native_tabs.dart';
 import 'salt_shaker_icon.dart';
+import 'sparkline_chart.dart';
 
 class SpaScreen extends StatefulWidget {
   final SavedDevice device;
@@ -23,18 +27,26 @@ class SpaScreen extends StatefulWidget {
 }
 
 class _SpaScreenState extends State<SpaScreen> {
-  late final EspHomeClient _client;
+  late EspHomeClient _client;
   late final AppLifecycleListener _lifecycle;
   Timer? _pauseTimer;
+
+  EspHomeClient _createClient(SavedDevice d) {
+    final remote = d.effectiveRemote;
+    return EspHomeClient(
+      host: d.host,
+      port: d.port,
+      encryptionKey: d.encryptionKey,
+      remoteUrl: remote.remoteUrl,
+      cfAccessClientId: remote.clientId,
+      cfAccessClientSecret: remote.clientSecret,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    _client = EspHomeClient(
-      host: widget.device.host,
-      port: widget.device.port,
-      encryptionKey: widget.device.encryptionKey,
-    );
+    _client = _createClient(widget.device);
     unawaited(_client.connect());
     // iOS/Android kill background sockets anyway; drop cleanly and reconnect on resume. Debounced:
     // moving the Flutter view between native tabs briefly reports paused/resumed, which must not
@@ -92,6 +104,37 @@ class _SpaScreenState extends State<SpaScreen> {
 
   Future<void> _updatePresetTemp({double? heatUpTempC, double? vacationTempC}) =>
       widget.store.upsert(_device.copyWith(heatUpTempC: heatUpTempC, vacationTempC: vacationTempC));
+
+  Future<void> _editConnection() async {
+    final prev = _device;
+    final saved = await showModalBottomSheet<SavedDevice>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddDeviceSheet(existing: prev),
+    );
+    if (saved == null) return;
+    await widget.store.upsert(saved);
+    final connectionChanged = saved.host != prev.host ||
+        saved.port != prev.port ||
+        saved.encryptionKey != prev.encryptionKey ||
+        saved.remoteUrl != prev.remoteUrl ||
+        saved.cfAccessClientId != prev.cfAccessClientId ||
+        saved.cfAccessClientSecret != prev.cfAccessClientSecret;
+    if (!connectionChanged || !mounted) return;
+    final old = _client;
+    setState(() {
+      _client = _createClient(saved);
+    });
+    old.dispose();
+    unawaited(_client.connect());
+  }
+
+  String _connectionSummary(SavedDevice d) {
+    final remote = d.effectiveRemote;
+    if (d.host.isEmpty && remote.hasRemoteUrl) return remote.remoteUrl;
+    if (remote.hasRemoteUrl) return '${d.host}:${d.port} · ${remote.remoteUrl}';
+    return '${d.host}:${d.port} · Local Wi-Fi only';
+  }
 
   void _run(Future<void> Function() action) {
     action().catchError((Object e) {
@@ -187,7 +230,8 @@ class _SpaScreenState extends State<SpaScreen> {
               key: PageStorageKey('tab-${tabs[index].label}'),
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
-                if (c.status != ConnectionStatus.connected) _ConnectionBanner(client: c),
+                if (c.status != ConnectionStatus.connected)
+                  _ConnectionBanner(client: c, onConfigure: _editConnection),
                 ...tabs[index].page,
               ],
             ),
@@ -299,9 +343,18 @@ class _SpaScreenState extends State<SpaScreen> {
           for (final e in [...g.saltSwitches, ...g.switches]) _ToggleTile(client: c, info: e, run: _run),
         ]),
       ],
-      if (g.comfortSensors.isNotEmpty) ...[
+      if (g.comfortSensors.isNotEmpty || g.historyWaterTemp != null) ...[
         const _Section('Water'),
-        _SensorGrid(client: c, sensors: g.comfortSensors),
+        if (g.comfortSensors.isNotEmpty) _SensorGrid(client: c, sensors: g.comfortSensors),
+        if (g.historyWaterTemp != null)
+          MicrochartCard(
+            title: 'Water temperature',
+            icon: Icons.thermostat,
+            accent: _heatColor,
+            series: HistorySeries.parse(c.states[g.historyWaterTemp!.key]?.text),
+            unit: f ? '°F' : '°C',
+            decimals: 1,
+          ),
       ],
     ];
   }
@@ -318,22 +371,57 @@ class _SpaScreenState extends State<SpaScreen> {
 
   Widget _cardColumn(List<Widget> children) => Card(child: Column(children: children));
 
-  List<Widget> _sensorPage(EspHomeClient c, List<EntityInfo> sensors, String title, String empty) => [
-        if (sensors.isEmpty)
-          _EmptyTab(empty)
-        else ...[
-          _Section(title),
+  List<Widget> _sensorPage(EspHomeClient c, List<EntityInfo> sensors, String title, String empty) {
+    final isPowerTab = title == 'Power';
+    final groups = _EntityGroups(c);
+    final hasPowerCharts = isPowerTab && (groups.historyPower != null || groups.historyEnergy != null);
+    return [
+      if (sensors.isEmpty && !hasPowerCharts)
+        _EmptyTab(empty)
+      else ...[
+        _Section(title),
+        if (isPowerTab && groups.historyPower != null)
+          MicrochartCard(
+            title: 'Total power draw',
+            icon: Icons.bolt,
+            accent: const Color(0xFFE8A317),
+            series: HistorySeries.parse(c.states[groups.historyPower!.key]?.text),
+            unit: 'W',
+          ),
+        if (isPowerTab && groups.historyEnergy != null)
+          MicrochartCard(
+            title: 'Daily energy',
+            icon: Icons.bar_chart,
+            accent: const Color(0xFF4FE3EA),
+            series: HistorySeries.parse(c.states[groups.historyEnergy!.key]?.text),
+            unit: 'kWh',
+            decimals: 2,
+            style: MicrochartStyle.bars,
+          ),
+        if (sensors.isNotEmpty) ...[
+          if (hasPowerCharts) const SizedBox(height: 10),
           _SensorGrid(client: c, sensors: sensors),
         ],
-      ];
+      ],
+    ];
+  }
 
   List<Widget> _saltPage(EspHomeClient c, _EntityGroups g) {
     final level = g.saltLevelSensor;
     final others = g.saltSensors.where((e) => e != level).toList();
+    final saltHist = g.historySalt == null ? HistorySeries.empty : HistorySeries.parse(c.states[g.historySalt!.key]?.text);
+    final saltAccent = saltHist.latest == null ? const Color(0xFF3D8BFD) : (saltZone(saltHist.latest!)?.$2 ?? const Color(0xFF3D8BFD));
     return [
       if (level != null) _SaltLevelCard(client: c, info: level, status: g.saltStatus),
       if (level == null && g.saltStatus.isNotEmpty)
         _cardColumn([for (final e in g.saltStatus) _StatusRow(client: c, info: e)]),
+      if (g.historySalt != null)
+        MicrochartCard(
+          title: 'Salt level history',
+          icon: Icons.water_drop,
+          accent: saltAccent,
+          series: saltHist,
+        ),
       if (others.isNotEmpty) ...[
         const _Section('Cartridge & generator'),
         _SensorGrid(client: c, sensors: others),
@@ -426,12 +514,33 @@ class _SpaScreenState extends State<SpaScreen> {
           for (final e in g.buttons) _ButtonRow(client: c, info: e, run: _run),
         ]),
       ],
-      if (g.config.isNotEmpty || c.deviceInfo != null)
+      const _Section('Connection'),
+      Card(
+        child: ListTile(
+          leading: Icon(c.isRemote ? Icons.cloud_done_outlined : Icons.wifi),
+          title: const Text('Connection & remote access'),
+          subtitle: Text(_connectionSummary(_device)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _editConnection,
+        ),
+      ),
+      if (g.config.isNotEmpty || g.historyFreeHeap != null || c.deviceInfo != null)
         Card(
           margin: const EdgeInsets.only(top: 16),
           child: ExpansionTile(
             title: const Text('Device & diagnostics'),
             children: [
+              if (g.historyFreeHeap != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: MicrochartCard(
+                    title: 'ESP32 free heap',
+                    icon: Icons.memory,
+                    accent: const Color(0xFF4FE3EA),
+                    series: HistorySeries.parse(c.states[g.historyFreeHeap!.key]?.text),
+                    unit: 'KB',
+                  ),
+                ),
               for (final e in g.config) _GenericRow(client: c, info: e, run: _run),
               if (c.deviceInfo != null) ...[
                 ListTile(dense: true, title: const Text('ESPHome'), trailing: Text(c.deviceInfo!.esphomeVersion)),
@@ -457,6 +566,7 @@ class _EntityGroups {
   late final EntityInfo? logoLight;
   late final EntityInfo? heatUpTempNumber, vacationTempNumber;
   late final EntityInfo? readyEtaSecondsSensor, heatingRateSensor, heatingProgressSensor, heatingRateCalibratedSensor, readyTimeTextSensor;
+  late final EntityInfo? historyWaterTemp, historyPower, historyEnergy, historySalt, historyFreeHeap;
   // Freshwater / ACE salt system: everything with "salt" in its id gets its own tab.
   late final List<EntityInfo> saltSensors, saltStatus, saltControls, saltButtons;
   List<EntityInfo> get saltSwitches => saltControls.where((e) => e.kind == EntityKind.switch_).toList();
@@ -475,7 +585,16 @@ class _EntityGroups {
 
   _EntityGroups(EspHomeClient c) {
     final all = c.entities.values.where((e) => !e.disabledByDefault);
-    bool isSalt(EntityInfo e) => e.objectId.contains('salt');
+    bool isHistory(EntityInfo e) => e.objectId.startsWith('history_');
+    EntityInfo? hist(String id) =>
+        all.where((e) => e.kind == EntityKind.textSensor && e.objectId == id).firstOrNull;
+    historyWaterTemp = hist('history_water_temp');
+    historyPower = hist('history_power');
+    historyEnergy = hist('history_energy');
+    historySalt = hist('history_salt');
+    historyFreeHeap = hist('history_free_heap');
+
+    bool isSalt(EntityInfo e) => e.objectId.contains('salt') && !isHistory(e);
     List<EntityInfo> sorted(Iterable<EntityInfo> it) => it.toList()..sort((a, b) => a.name.compareTo(b.name));
     List<EntityInfo> salt(Set<EntityKind> kinds) => sorted(all.where((e) => isSalt(e) && kinds.contains(e.kind)));
     saltSensors = salt({EntityKind.sensor});
@@ -483,7 +602,7 @@ class _EntityGroups {
     saltControls = salt({EntityKind.switch_, EntityKind.number, EntityKind.select});
     saltButtons = salt({EntityKind.button});
 
-    final visible = all.where((e) => !isSalt(e));
+    final visible = all.where((e) => !isSalt(e) && !isHistory(e));
     heatUpTempNumber =
         visible.where((e) => e.kind == EntityKind.number && e.objectId == 'heat_up_temperature').firstOrNull;
     vacationTempNumber =
@@ -910,7 +1029,7 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (client.status) {
-      ConnectionStatus.connected => ('Online', Colors.green),
+      ConnectionStatus.connected => (client.isRemote ? 'Remote' : 'Online', Colors.green),
       ConnectionStatus.connecting => ('Connecting', Colors.orange),
       ConnectionStatus.failed => ('Offline', Colors.red),
       ConnectionStatus.disconnected => ('Offline', Colors.grey),
@@ -925,10 +1044,13 @@ class _StatusChip extends StatelessWidget {
 
 class _ConnectionBanner extends StatelessWidget {
   final EspHomeClient client;
-  const _ConnectionBanner({required this.client});
+  final VoidCallback? onConfigure;
+  const _ConnectionBanner({required this.client, this.onConfigure});
   @override
   Widget build(BuildContext context) {
     final connecting = client.status == ConnectionStatus.connecting;
+    final target = client.host.isNotEmpty ? client.host : normalizeRemoteUrl(client.remoteUrl ?? '');
+    final isCfBlocked = client.lastError != null && client.lastError!.contains('Cloudflare Access');
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: Theme.of(context).colorScheme.errorContainer,
@@ -936,9 +1058,18 @@ class _ConnectionBanner extends StatelessWidget {
         leading: connecting
             ? const SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2))
             : const Icon(Icons.wifi_off),
-        title: Text(connecting ? 'Connecting to ${client.host}…' : 'Not connected'),
+        title: Text(connecting ? 'Connecting to $target…' : 'Not connected'),
         subtitle: client.lastError == null ? null : Text(client.lastError!),
-        trailing: connecting ? null : TextButton(onPressed: client.connect, child: const Text('Retry')),
+        trailing: connecting
+            ? null
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isCfBlocked && onConfigure != null)
+                    TextButton(onPressed: onConfigure, child: const Text('Configure')),
+                  TextButton(onPressed: client.connect, child: const Text('Retry')),
+                ],
+              ),
       ),
     );
   }

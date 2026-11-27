@@ -89,6 +89,16 @@ class DeviceInfo {
   final String projectVersion;
   final String model;
 
+  const DeviceInfo.basic({
+    required this.name,
+    this.friendlyName = '',
+    this.macAddress = '',
+    this.esphomeVersion = '',
+    this.projectName = '',
+    this.projectVersion = '',
+    this.model = '',
+  });
+
   DeviceInfo.fromProto(ProtoMessage m)
       : name = m.string(2),
         macAddress = m.string(3),

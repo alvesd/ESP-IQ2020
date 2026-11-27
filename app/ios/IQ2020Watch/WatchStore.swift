@@ -31,6 +31,8 @@ struct SpaSnapshot: Equatable {
   let readyEtaSeconds: Int?
   let readyEtaCalibrated: Bool
   let heatingRate: Double?
+  let tempHistory: [Double]
+  let saltHistory: [Double]
 
   init?(_ m: [String: Any]) {
     guard let name = m["name"] as? String else { return nil }
@@ -58,6 +60,8 @@ struct SpaSnapshot: Equatable {
     readyEtaSeconds = (m["readyEtaSeconds"] as? NSNumber)?.intValue
     readyEtaCalibrated = m["readyEtaCalibrated"] as? Bool ?? false
     heatingRate = num("heatingRate")
+    tempHistory = (m["tempHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
+    saltHistory = (m["saltHistory"] as? [NSNumber] ?? []).map { $0.doubleValue }
   }
 
   /// Target moved by `steps`, snapped to the step and clamped to the range.

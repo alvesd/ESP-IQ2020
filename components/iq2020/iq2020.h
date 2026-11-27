@@ -224,95 +224,96 @@ protected:
 	};
 
 	esphome::uart::UARTComponent *stream_{ nullptr };
-	uint16_t port_;
-	size_t buf_size_;
+	uint16_t port_{ 0 };
+	size_t buf_size_{ 128 };
 	esphome::GPIOPin *flow_control_pin_{ nullptr };
 	esphome::GPIOPin *trigger_poll_pin_{ nullptr };
-	bool legacy_polling_;
-	bool ace_emulation_;
+	bool legacy_polling_{ false };
+	bool ace_emulation_{ false };
 	unsigned char ace_flags = 1;     // 0x01 = Functioning, 0x04 = Boosting, 0x08 = Testing
 	unsigned char ace_status = 3;    // 0 to 7 with 3 or 4 being ideal.
-	bool freshwater_emulation_;
-	bool audio_emulation_;
-	bool active_;
+	bool freshwater_emulation_{ false };
+	bool audio_emulation_{ false };
+	bool active_{ false };
 	int delay_start_ = 30;              // Seconds to keep active off at boot before switching it on
-	unsigned long activate_at_ = 0;     // millis timestamp to switch active on (0 = nothing scheduled)
-	bool old_clock_;
+	uint32_t activate_start_ms_ = 0;    // millis timestamp when startup delay began
+	uint32_t activate_delay_ms_ = 0;    // Startup delay duration in ms (0 = nothing scheduled)
+	bool old_clock_{ false };
 	bool coolzone_enabled_ = false;
 	unsigned char audio_module_address = 0x33; // There are two audio modules at 0x33 or 0x1D.
-	int polling_rate_;
+	int polling_rate_{ 65 };
 
 #ifdef USE_BINARY_SENSOR
-	esphome::binary_sensor::BinarySensor *connected_sensor_;
-	esphome::binary_sensor::BinarySensor *connectionkit_sensor_;
-	esphome::binary_sensor::BinarySensor *salt_boost_sensor_;
-	esphome::binary_sensor::BinarySensor *salt_confirmed_sensor_;
-	esphome::binary_sensor::BinarySensor *status_state1_;
-	esphome::binary_sensor::BinarySensor *status_state2_;
+	esphome::binary_sensor::BinarySensor *connected_sensor_{ nullptr };
+	esphome::binary_sensor::BinarySensor *connectionkit_sensor_{ nullptr };
+	esphome::binary_sensor::BinarySensor *salt_boost_sensor_{ nullptr };
+	esphome::binary_sensor::BinarySensor *salt_confirmed_sensor_{ nullptr };
+	esphome::binary_sensor::BinarySensor *status_state1_{ nullptr };
+	esphome::binary_sensor::BinarySensor *status_state2_{ nullptr };
 #endif
 #ifdef USE_SENSOR
-	esphome::sensor::Sensor *current_f_temp_sensor_;
-	esphome::sensor::Sensor *target_f_temp_sensor_;
-	esphome::sensor::Sensor *outlet_f_temp_sensor_;
-	esphome::sensor::Sensor *current_c_temp_sensor_;
-	esphome::sensor::Sensor *target_c_temp_sensor_;
-	esphome::sensor::Sensor *outlet_c_temp_sensor_;
-	esphome::sensor::Sensor *connection_count_sensor_;
-	esphome::sensor::Sensor *heater_total_runtime_sensor_;
-	esphome::sensor::Sensor *jets1_total_runtime_sensor_;
-	esphome::sensor::Sensor *lifetime_runtime_sensor_;
-	esphome::sensor::Sensor *jets2_total_runtime_sensor_;
-	esphome::sensor::Sensor *jets3_total_runtime_sensor_;
-	esphome::sensor::Sensor *lights_total_runtime_sensor_;
-	esphome::sensor::Sensor *circ_pump_total_runtime_sensor_;
-	esphome::sensor::Sensor *jet1_low_total_runtime_sensor_;
-	esphome::sensor::Sensor *jet2_low_total_runtime_sensor_;
-	esphome::sensor::Sensor *power_on_counter_sensor_;
-	esphome::sensor::Sensor *salt_content_sensor_;
-	esphome::sensor::Sensor *voltage_l1_sensor_;
-	esphome::sensor::Sensor *voltage_heater_sensor_;
-	esphome::sensor::Sensor *voltage_l2_sensor_;
-	esphome::sensor::Sensor *current_l1_sensor_;
-	esphome::sensor::Sensor *current_heater_sensor_;
-	esphome::sensor::Sensor *current_l2_sensor_;
-	esphome::sensor::Sensor *power_l1_sensor_;
-	esphome::sensor::Sensor *power_heater_sensor_;
-	esphome::sensor::Sensor *power_l2_sensor_;
-	esphome::sensor::Sensor *pcb_f_temperature_sensor_;
-	esphome::sensor::Sensor *pcb_c_temperature_sensor_;
-	esphome::sensor::Sensor *buttons_sensor_;
-	esphome::sensor::Sensor *logo_lights_sensor_;
-	esphome::sensor::Sensor *logo_lights_raw_sensor_;
-	esphome::sensor::Sensor *lights_intensity_sensor_;
-	esphome::sensor::Sensor *lights_intensity_underwater_sensor_;
-	esphome::sensor::Sensor *lights_intensity_bartop_sensor_;
-	esphome::sensor::Sensor *lights_intensity_pillow_sensor_;
-	esphome::sensor::Sensor *lights_intensity_exterior_sensor_;
-	esphome::sensor::Sensor *lights_color_underwater_sensor_;
-	esphome::sensor::Sensor *lights_color_bartop_sensor_;
-	esphome::sensor::Sensor *lights_color_pillow_sensor_;
-	esphome::sensor::Sensor *lights_color_exterior_sensor_;
-	esphome::sensor::Sensor *lights_main_loop_speed_sensor_;
-	esphome::sensor::Sensor *iq_va_sensor_;
-	esphome::sensor::Sensor *iq_vb_sensor_;
-	esphome::sensor::Sensor *iq_vc_sensor_;
-	esphome::sensor::Sensor *iq_orp_sensor_;
-	esphome::sensor::Sensor *iq_chlorine_sensor_;
-	esphome::sensor::Sensor *iq_ph_sensor_;
-	esphome::sensor::Sensor *iq_hoursleft_sensor_;
-	esphome::sensor::Sensor *rtc_timestamp_sensor_;
-	esphome::sensor::Sensor *coolzone_mode_raw_sensor_;
-	esphome::sensor::Sensor *coolzone_state_raw_sensor_;
-	esphome::sensor::Sensor *salt_cartridge_age_days_sensor_;
-	esphome::sensor::Sensor *salt_days_since_manual_test_sensor_;
-	esphome::sensor::Sensor *salt_generation_hours_sensor_;
-	esphome::sensor::Sensor *salt_error_code_sensor_;
+	esphome::sensor::Sensor *current_f_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *target_f_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *outlet_f_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *current_c_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *target_c_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *outlet_c_temp_sensor_{ nullptr };
+	esphome::sensor::Sensor *connection_count_sensor_{ nullptr };
+	esphome::sensor::Sensor *heater_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *jets1_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *lifetime_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *jets2_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *jets3_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *circ_pump_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *jet1_low_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *jet2_low_total_runtime_sensor_{ nullptr };
+	esphome::sensor::Sensor *power_on_counter_sensor_{ nullptr };
+	esphome::sensor::Sensor *salt_content_sensor_{ nullptr };
+	esphome::sensor::Sensor *voltage_l1_sensor_{ nullptr };
+	esphome::sensor::Sensor *voltage_heater_sensor_{ nullptr };
+	esphome::sensor::Sensor *voltage_l2_sensor_{ nullptr };
+	esphome::sensor::Sensor *current_l1_sensor_{ nullptr };
+	esphome::sensor::Sensor *current_heater_sensor_{ nullptr };
+	esphome::sensor::Sensor *current_l2_sensor_{ nullptr };
+	esphome::sensor::Sensor *power_l1_sensor_{ nullptr };
+	esphome::sensor::Sensor *power_heater_sensor_{ nullptr };
+	esphome::sensor::Sensor *power_l2_sensor_{ nullptr };
+	esphome::sensor::Sensor *pcb_f_temperature_sensor_{ nullptr };
+	esphome::sensor::Sensor *pcb_c_temperature_sensor_{ nullptr };
+	esphome::sensor::Sensor *buttons_sensor_{ nullptr };
+	esphome::sensor::Sensor *logo_lights_sensor_{ nullptr };
+	esphome::sensor::Sensor *logo_lights_raw_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_intensity_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_intensity_underwater_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_intensity_bartop_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_intensity_pillow_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_intensity_exterior_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_color_underwater_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_color_bartop_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_color_pillow_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_color_exterior_sensor_{ nullptr };
+	esphome::sensor::Sensor *lights_main_loop_speed_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_va_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_vb_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_vc_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_orp_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_chlorine_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_ph_sensor_{ nullptr };
+	esphome::sensor::Sensor *iq_hoursleft_sensor_{ nullptr };
+	esphome::sensor::Sensor *rtc_timestamp_sensor_{ nullptr };
+	esphome::sensor::Sensor *coolzone_mode_raw_sensor_{ nullptr };
+	esphome::sensor::Sensor *coolzone_state_raw_sensor_{ nullptr };
+	esphome::sensor::Sensor *salt_cartridge_age_days_sensor_{ nullptr };
+	esphome::sensor::Sensor *salt_days_since_manual_test_sensor_{ nullptr };
+	esphome::sensor::Sensor *salt_generation_hours_sensor_{ nullptr };
+	esphome::sensor::Sensor *salt_error_code_sensor_{ nullptr };
 #endif
 #ifdef USE_TEXT_SENSOR
-	esphome::text_sensor::TextSensor *version_sensor_;
-	esphome::text_sensor::TextSensor *rtc_datetime_sensor_;
-	esphome::text_sensor::TextSensor *salt_module_status_sensor_;
-	esphome::text_sensor::TextSensor *salt_level_friendly_sensor_;
+	esphome::text_sensor::TextSensor *version_sensor_{ nullptr };
+	esphome::text_sensor::TextSensor *rtc_datetime_sensor_{ nullptr };
+	esphome::text_sensor::TextSensor *salt_module_status_sensor_{ nullptr };
+	esphome::text_sensor::TextSensor *salt_level_friendly_sensor_{ nullptr };
 #endif
 
 	std::unique_ptr<uint8_t[]> buf_{};
@@ -332,7 +333,8 @@ protected:
 	int number_state[NUMBERCOUNT];   // Current state of all numbers
 	int number_pending[NUMBERCOUNT]; // Desired state of all numbers
 #endif
-	unsigned long connectionKit = 0; // The time the spa connection kit was last seen
+	uint32_t connection_kit_last_ms_ = 0; // millis timestamp when the spa connection kit was last seen
+	bool connection_kit_seen_ = false;
 	int version_poll_count = 0;     // Number of version poll attempts made
 	bool version_polling_done = false; // Stop gating polling on the version string (got it, gave up, or not configured)
 	int got_audio_data = 0;
@@ -348,10 +350,13 @@ protected:
 	float pending_temp = NOT_SET;
 	float pending_temp_cmd = NOT_SET;
 	int pending_temp_retry = 0;
-	unsigned long next_poll = 0;
-	unsigned long next_retry = 0;
-	unsigned long last_pin_check_time = 0;
+	uint32_t last_poll_ms_ = 0;
+	uint32_t poll_interval_ms_ = 0;
+	uint32_t last_retry_ms_ = 0;
+	uint32_t last_pin_check_time_ = 0;
 	int next_retry_count = 0;
+	bool retrying_ = false;
+	void schedule_poll_in(uint32_t now, uint32_t delay_ms) { this->last_poll_ms_ = now; this->poll_interval_ms_ = delay_ms; }
 	int salt_power = NOT_SET; // This is polled too frequently to send to HA each time.
 	int salt_content = NOT_SET; // This is polled too frequently to send to HA each time.
 	unsigned char salt_module_address = 0x29; // Last seen salt module address (0x24 legacy ACE, 0x29 freshwater salt).

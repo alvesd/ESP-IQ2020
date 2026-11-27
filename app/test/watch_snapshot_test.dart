@@ -73,6 +73,10 @@ void main() {
     c.states[12] = const EntityState(key: 12, boolValue: true);
     c.entities[13] = EntityInfo(kind: EntityKind.sensor, key: 13, objectId: 'heating_rate', name: 'Heating Rate', unit: '°F/h');
     c.states[13] = const EntityState(key: 13, number: 6.5);
+    c.entities[14] = EntityInfo(kind: EntityKind.textSensor, key: 14, objectId: 'history_water_temp', name: 'History Water Temp');
+    c.states[14] = const EntityState(key: 14, text: '6h:101.0,,102.5');
+    c.entities[15] = EntityInfo(kind: EntityKind.textSensor, key: 15, objectId: 'history_salt', name: 'History Salt');
+    c.states[15] = const EntityState(key: 15, text: '6h:48,50,52');
 
     final s = SpaSnapshot.fromClient(c, name: 'hotspring');
     expect(s.heatUpTemp.round(), 103);
@@ -80,6 +84,8 @@ void main() {
     expect(s.readyEtaSeconds, 1800);
     expect(s.readyEtaCalibrated, isTrue);
     expect(s.heatingRate, closeTo(6.5, 0.01));
+    expect(s.tempHistory, [101.0, 102.5]);
+    expect(s.saltHistory, [48.0, 50.0, 52.0]);
 
     final roundTrip = SpaSnapshot.fromMap(s.toMap());
     expect(roundTrip.toMap(), s.toMap());
